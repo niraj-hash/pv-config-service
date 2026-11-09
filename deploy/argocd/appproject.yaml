@@ -1,0 +1,100 @@
+# The Argo CD project every Runvance service is deployed in (docs/deploy-with-argocd.md). Applied by the
+# runvance-platform Application (Interview's infrastructure/argocd/projects/runvance/), synced by hand.
+#
+# Nothing in this project syncs by itself: the Applications (applicationset-<env>.yaml) have no
+# automated sync, so a merged release file only makes its Application OutOfSync until someone with the
+# deployer role presses Sync. Rollback is Argo CD's History -> Rollback (the same `sync` permission).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: runvance
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # before the ApplicationSets that reference it
+    # Sync notifications for every Application in the project (services and templates:
+    # Interview's install/values-argocd.yaml; email goes through the ACS SMTP relay). Disabled until a
+    # real recipient replaces the placeholder (docs/deploy-with-argocd.md, "Set up once"):
+    # notifications.argoproj.io/subscribe.on-deployed.email: REPLACE-WITH-DEPLOYS-MAILBOX
+    # notifications.argoproj.io/subscribe.on-sync-failed.email: REPLACE-WITH-DEPLOYS-MAILBOX
+    # notifications.argoproj.io/subscribe.on-health-degraded.email: REPLACE-WITH-DEPLOYS-MAILBOX
+spec:
+  description: Runvance platform services and products, staging and prod (deployed by hand)
+
+  # Charts come from each service's repository at the commit its release file pins; values and
+  # release files from pv-config-service; the runvance-service library chart from ACR (OCI).
+  sourceRepos:
+    - git@github.com:niraj-hash/pv-config-service.git
+    - git@github.com:payvizio-pg/pg-api-gateway.git
+    - git@github.com:niraj-hash/pv-auth-service.git
+    - git@github.com:payvizio-pg/notification-service.git
+    - git@github.com:niraj-hash/runvance-ai-service.git
+    - git@github.com:Payvizio-Technologies/PayVizio-LeadOS.git
+    - git@github.com:heimdal01/hr-ai-solution.git
+    - git@github.com:niraj-hash/hms.git
+    - git@github.com:niraj-hash/ai-demo-agent.git
+    - git@github.com:niraj-hash/interview-ai-management.git
+    - git@github.com:niraj-hash/runvance.git
+    - acrinterviewaistaging.azurecr.io/helm   # the library chart (Helm OCI repository credential)
+
+  # One namespace per product (docs/runtime.md, "Namespaces"); staging is the cluster Argo CD runs in,
+  # prod is registered once it exists (`argocd cluster add <context> --name aks-runvance-prod`). Until
+  # then the prod ApplicationSet creates no Applications (their destination does not resolve).
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: pg-api-gateway }
+    - { server: https://kubernetes.default.svc, namespace: runvance-platform }
+    - { server: https://kubernetes.default.svc, namespace: notification }
+    - { server: https://kubernetes.default.svc, namespace: runvance-ai }
+    - { server: https://kubernetes.default.svc, namespace: pv-config }
+    - { server: https://kubernetes.default.svc, namespace: leados }
+    - { server: https://kubernetes.default.svc, namespace: peoplevizio }
+    - { server: https://kubernetes.default.svc, namespace: hms }
+    - { server: https://kubernetes.default.svc, namespace: demoagent }
+    - { server: https://kubernetes.default.svc, namespace: meet }
+    - { server: https://kubernetes.default.svc, namespace: interviewai }
+    - { server: https://kubernetes.default.svc, namespace: interviewai-sandbox }   # Interview's code runner (off)
+    - { server: https://kubernetes.default.svc, namespace: runvance }
+    - { name: aks-runvance-prod, namespace: pg-api-gateway }
+    - { name: aks-runvance-prod, namespace: runvance-platform }
+    - { name: aks-runvance-prod, namespace: notification }
+    - { name: aks-runvance-prod, namespace: runvance-ai }
+    - { name: aks-runvance-prod, namespace: pv-config }
+    - { name: aks-runvance-prod, namespace: leados }
+    - { name: aks-runvance-prod, namespace: peoplevizio }
+    - { name: aks-runvance-prod, namespace: hms }
+    - { name: aks-runvance-prod, namespace: demoagent }
+    - { name: aks-runvance-prod, namespace: meet }
+    - { name: aks-runvance-prod, namespace: interviewai }
+    - { name: aks-runvance-prod, namespace: interviewai-sandbox }
+    - { name: aks-runvance-prod, namespace: runvance }
+
+  # Cluster-scoped: only the destination namespaces themselves (CreateNamespace, and Interview's
+  # sandbox Namespace when its code runner is on). Never CRDs, ClusterRoles or webhooks: those stay
+  # with whoever runs the cluster (Consul, External Secrets, cert-manager are installed outside Argo CD).
+  clusterResourceWhitelist:
+    - { group: "", kind: Namespace }
+  namespaceResourceBlacklist:
+    - { group: "", kind: ResourceQuota }
+    - { group: "", kind: LimitRange }
+
+  # Entra ID groups through the existing OIDC setup (groups claim, `scopes: [groups]` in Interview's
+  # install/values-argocd.yaml); role:platform-admin keeps full control from there. The group object
+  # ids are placeholders: Interview's infrastructure/argocd/entra/README.md shows how to create them.
+  roles:
+    - name: deployer
+      description: Deploy and roll back any Runvance service (Sync, History and Rollback, Restart), read logs
+      policies:
+        - p, proj:runvance:deployer, applications, get, runvance/*, allow
+        - p, proj:runvance:deployer, applications, sync, runvance/*, allow     # Sync and Rollback
+        - p, proj:runvance:deployer, applications, action/apps/Deployment/restart, runvance/*, allow
+        - p, proj:runvance:deployer, applications, override, runvance/*, deny  # no local manifests or parameter overrides
+        - p, proj:runvance:deployer, logs, get, runvance/*, allow
+        - p, proj:runvance:deployer, exec, create, runvance/*, deny
+      groups:
+        - REPLACE-WITH-ENTRA-GROUP-OBJECT-ID-RUNVANCE-DEPLOYERS
+    - name: viewer
+      description: See what is deployed, its history, diffs and logs
+      policies:
+        - p, proj:runvance:viewer, applications, get, runvance/*, allow
+        - p, proj:runvance:viewer, logs, get, runvance/*, allow
+      groups:
+        - REPLACE-WITH-ENTRA-GROUP-OBJECT-ID-RUNVANCE-VIEWERS

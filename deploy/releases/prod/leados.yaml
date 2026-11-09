@@ -1,0 +1,13 @@
+# leados in prod: what Argo CD deploys when someone presses Sync on leados-prod.
+# Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
+# History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
+#
+#   leados-api  acrrunvanceprod.azurecr.io/leados-api:(none)
+#   leados-web  acrrunvanceprod.azurecr.io/leados-web:(none)
+releaseOf: leados
+# Not released yet: no Application until a release names the chart's commit.
+chartRevision: "unreleased"
+# Chart values (this file is the chart's last value file): the image tags.
+common:
+  image:
+    tag: ""

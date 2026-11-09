@@ -1,0 +1,161 @@
+# Runvance Health (HMS) RBAC catalog. Permissions are the old in-app RBAC catalog (RbacService:
+# 21 modules x create/read/update/delete/approve/export, '<module>:<action>' renamed '<module>.<action>').
+# pg-api-gateway's rules (config/pg-api-gateway/conf.d/hms.yml) check roles; permissions reach the
+# web app through /bff/session and drive what it shows.
+auth:
+  catalog:
+    hms:
+      name: Runvance Health
+      origins: [https://health.runvance.com, http://hms.localhost:8080]
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: Clinic and hospital management
+        category: Healthcare
+        color: "#be123c"
+        order: 60
+      self-signup: true
+      signup-role: clinic_admin
+      permissions:
+        patient.create: Create patient
+        patient.read: Read patient
+        patient.update: Update patient
+        patient.delete: Delete patient
+        patient.approve: Approve patient
+        patient.export: Export patient
+        doctor.create: Create doctor
+        doctor.read: Read doctor
+        doctor.update: Update doctor
+        doctor.delete: Delete doctor
+        doctor.approve: Approve doctor
+        doctor.export: Export doctor
+        appointment.create: Create appointment
+        appointment.read: Read appointment
+        appointment.update: Update appointment
+        appointment.delete: Delete appointment
+        appointment.approve: Approve appointment
+        appointment.export: Export appointment
+        opd.create: Create OPD
+        opd.read: Read OPD
+        opd.update: Update OPD
+        opd.delete: Delete OPD
+        opd.approve: Approve OPD
+        opd.export: Export OPD
+        ipd.create: Create IPD
+        ipd.read: Read IPD
+        ipd.update: Update IPD
+        ipd.delete: Delete IPD
+        ipd.approve: Approve IPD
+        ipd.export: Export IPD
+        treatment.create: Create treatment
+        treatment.read: Read treatment
+        treatment.update: Update treatment
+        treatment.delete: Delete treatment
+        treatment.approve: Approve treatment
+        treatment.export: Export treatment
+        prescription.create: Create prescription
+        prescription.read: Read prescription
+        prescription.update: Update prescription
+        prescription.delete: Delete prescription
+        prescription.approve: Approve prescription
+        prescription.export: Export prescription
+        lab.create: Create lab
+        lab.read: Read lab
+        lab.update: Update lab
+        lab.delete: Delete lab
+        lab.approve: Approve lab
+        lab.export: Export lab
+        pharmacy.create: Create pharmacy
+        pharmacy.read: Read pharmacy
+        pharmacy.update: Update pharmacy
+        pharmacy.delete: Delete pharmacy
+        pharmacy.approve: Approve pharmacy
+        pharmacy.export: Export pharmacy
+        billing.create: Create billing
+        billing.read: Read billing
+        billing.update: Update billing
+        billing.delete: Delete billing
+        billing.approve: Approve billing
+        billing.export: Export billing
+        invoice.create: Create invoice
+        invoice.read: Read invoice
+        invoice.update: Update invoice
+        invoice.delete: Delete invoice
+        invoice.approve: Approve invoice
+        invoice.export: Export invoice
+        insurance.create: Create insurance
+        insurance.read: Read insurance
+        insurance.update: Update insurance
+        insurance.delete: Delete insurance
+        insurance.approve: Approve insurance
+        insurance.export: Export insurance
+        inventory.create: Create inventory
+        inventory.read: Read inventory
+        inventory.update: Update inventory
+        inventory.delete: Delete inventory
+        inventory.approve: Approve inventory
+        inventory.export: Export inventory
+        department.create: Create department
+        department.read: Read department
+        department.update: Update department
+        department.delete: Delete department
+        department.approve: Approve department
+        department.export: Export department
+        employee.create: Create employee
+        employee.read: Read employee
+        employee.update: Update employee
+        employee.delete: Delete employee
+        employee.approve: Approve employee
+        employee.export: Export employee
+        user.create: Create user
+        user.read: Read user
+        user.update: Update user
+        user.delete: Delete user
+        user.approve: Approve user
+        user.export: Export user
+        role.create: Create role
+        role.read: Read role
+        role.update: Update role
+        role.delete: Delete role
+        role.approve: Approve role
+        role.export: Export role
+        report.create: Create report
+        report.read: Read report
+        report.update: Update report
+        report.delete: Delete report
+        report.approve: Approve report
+        report.export: Export report
+        audit.create: Create audit
+        audit.read: Read audit
+        audit.update: Update audit
+        audit.delete: Delete audit
+        audit.approve: Approve audit
+        audit.export: Export audit
+        tenant.create: Create clinic (tenant)
+        tenant.read: Read clinic (tenant)
+        tenant.update: Update clinic (tenant)
+        tenant.delete: Delete clinic (tenant)
+        tenant.approve: Approve clinic (tenant)
+        tenant.export: Export clinic (tenant)
+        settings.create: Create settings
+        settings.read: Read settings
+        settings.update: Update settings
+        settings.delete: Delete settings
+        settings.approve: Approve settings
+        settings.export: Export settings
+      # Each role's permissions are also what Health's @RequiresPermission checks (X-PV-Permissions):
+      # grants match the role defaults those checks were written with on hms main (2026-07).
+      roles:
+        super_admin: { name: Platform super admin, permissions: ["*"], description: "Cross-clinic administration; assign in the platform organization only" }
+        tenant_admin: { name: Tenant admin, permissions: ["*"], description: "Full access to the organization's clinic" }
+        clinic_admin: { name: Clinic admin, permissions: ["*"], description: "Full access to the clinic; the person who signs a clinic up" }
+        hospital_admin: { name: Hospital admin, permissions: ["*"], description: "Full access to the hospital" }
+        doctor: { name: Doctor, permissions: [patient.read, patient.update, appointment.read, appointment.update, opd.create, opd.read, opd.update, ipd.read, ipd.update, treatment.create, treatment.read, treatment.update, treatment.approve, prescription.create, prescription.read, prescription.update, prescription.export, lab.create, lab.read, pharmacy.read, insurance.read, department.read, doctor.read, report.read, appointment.create, appointment.delete, treatment.delete] }
+        nurse: { name: Nurse, permissions: [patient.read, appointment.read, opd.read, ipd.create, ipd.read, ipd.update, treatment.read, treatment.update, prescription.read, lab.read, pharmacy.read, inventory.read, department.read, doctor.read, ipd.delete] }
+        receptionist: { name: Receptionist, permissions: [patient.create, patient.read, patient.update, appointment.create, appointment.read, appointment.update, appointment.delete, opd.create, opd.read, opd.update, ipd.read, doctor.read, department.read, invoice.read, billing.read, patient.delete] }
+        pharmacist: { name: Pharmacist, permissions: [pharmacy.create, pharmacy.read, pharmacy.update, pharmacy.export, inventory.read, inventory.update, prescription.read, patient.read, pharmacy.delete] }
+        lab_technician: { name: Lab technician, permissions: [lab.create, lab.read, lab.update, lab.approve, lab.export, patient.read, lab.delete] }
+        accountant: { name: Accountant, permissions: [billing.create, billing.read, billing.update, billing.approve, billing.export, invoice.create, invoice.read, invoice.update, invoice.export, insurance.create, insurance.read, insurance.update, insurance.approve, report.read, report.export, patient.read, insurance.delete] }
+        inventory_manager: { name: Inventory manager, permissions: [inventory.create, inventory.read, inventory.update, inventory.approve, inventory.export, pharmacy.read, inventory.delete] }
+        hr_manager: { name: HR manager, permissions: [employee.create, employee.read, employee.update, employee.delete, employee.approve, employee.export, department.read, report.read] }
+        staff: { name: Staff, permissions: [patient.create, patient.read, patient.update, appointment.create, appointment.read, appointment.update, opd.create, opd.read, opd.update, ipd.read, ipd.update, treatment.read, treatment.update, prescription.read, lab.read, pharmacy.read, invoice.create, invoice.read, invoice.update, billing.read, insurance.read, inventory.read, department.read, doctor.read, employee.read, report.read, appointment.delete, insurance.approve, insurance.create, insurance.delete, insurance.update, inventory.create, inventory.delete, inventory.update, ipd.create, ipd.delete, lab.approve, lab.create, lab.delete, lab.update, patient.delete, pharmacy.create, pharmacy.delete, pharmacy.update, treatment.create, treatment.delete], description: "General clinic staff" }
+        patient: { name: Patient, permissions: [appointment.read, prescription.read, invoice.read, lab.read], description: "Patient portal: own appointments, prescriptions, invoices and reports" }

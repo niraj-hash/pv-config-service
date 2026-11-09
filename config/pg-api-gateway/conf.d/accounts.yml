@@ -1,0 +1,30 @@
+# pv-auth-service's public surface (accounts.runvance.com): sign-in, sign-up, the suite's home
+# (/home, every app in one place), team pages and OpenID Connect endpoints only.
+# Its admin API (/api/v1/** except /api/v1/me) stays inside the network.
+pv:
+  gateway:
+    products:
+      accounts:
+        name: Runvance accounts
+        hosts: [accounts.runvance.com, accounts.localhost]
+        browser-sign-in: false
+        routes:
+          - id: accounts-sign-in
+            access: PUBLIC
+            upstream: lb://pv-auth-service
+            paths: ["/", "/login", "/logout", "/signup", "/account", "/password/**", "/select-organization",
+                    "/no-access", "/assets/**", "/error", "/oauth2/**", "/.well-known/**", "/userinfo",
+                    "/connect/logout", "/invite", "/invite/**", "/team", "/team/**", "/verify-email", "/account/**",
+                    "/home", "/home/**"]
+            # Ten sign-in, sign-up, invitation, team, apps, password and token posts a minute per client address.
+            rate-limit:
+              key: CLIENT_IP
+              replenish-rate: 1
+              burst-capacity: 10
+              requested-tokens: 6
+              paths: ["/login", "/signup", "/invite/**", "/team/**", "/account/**", "/home/**", "/password/**", "/oauth2/token"]
+              methods: [POST]
+          - id: accounts-me
+            access: PUBLIC # pv-auth-service checks its own bearer token here
+            upstream: lb://pv-auth-service
+            paths: ["/api/v1/me", "/api/v1/me/apps"]

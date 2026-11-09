@@ -1,0 +1,39 @@
+# Runvance Notify server API (notify-api.*): tenants' servers send with one of their API keys, and
+# SendGrid and Twilio post delivery events (signed; checked by the service). Anonymous at the
+# gateway; notification-service checks the key and accepts it on /api/notifications/** only.
+# Same backend as conf.d/notification.yml, its own host.
+pv:
+  gateway:
+    products:
+      notification-api:
+        name: Runvance Notify API
+        hosts: [notify-api.runvance.com, notify-api.localhost]
+        browser-sign-in: false
+        routes:
+          - id: notification-server-api
+            upstream: lb://notification-service
+            paths: ["/api/notifications/**", "/api/webhooks/providers/**"]
+            access: PROTECTED
+            default-rule: DENY
+            response-timeout-ms: 120000 # batch sends are synchronous
+            # The service's declared limit (app.rate-limit.default-per-minute: 120 on API-key traffic), never enforced
+            # there: 120 requests a minute per API key, from either header. The plans' monthly sends stay the
+            # service's (a business quota); a batch is one request.
+            rate-limit: { key: API_KEY, headers: [X-API-Key, Authorization], paths: ["/api/notifications", "/api/notifications/**"], replenish-rate: 2, burst-capacity: 120 }
+            rules:
+              # The service requires the tenant's API key on these (and only these) paths.
+              - paths: ["/api/notifications/send", "/api/notifications/send/batch"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/notifications", "/api/notifications/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/notifications/{id}/status"] # delivery-status callback from relays
+                methods: [PATCH]
+                anonymous: true
+              # Provider delivery events, one URL per provider configuration ("platform" = the
+              # platform's own SendGrid account). The service checks SendGrid's Signed Event Webhook
+              # (ECDSA) / X-Twilio-Signature with that configuration's key and refuses anything else.
+              - paths: ["/api/webhooks/providers/sendgrid/{configId}", "/api/webhooks/providers/twilio/{configId}"]
+                methods: [POST]
+                anonymous: true

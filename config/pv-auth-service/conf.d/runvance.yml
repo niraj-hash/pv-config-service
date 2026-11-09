@@ -1,0 +1,17 @@
+# Runvance Accelerator: an internal admin API for Runvance staff. No sign-up; assign role admin
+# in the platform organization (the gateway's rules require both).
+auth:
+  catalog:
+    runvance:
+      name: Runvance Accelerator
+      origins: [https://accelerator.runvance.com, http://runvance.localhost:8080] # gateway sign-in callbacks
+      app:
+        listed: false # staff only: never on the launcher or the sign-up picker
+      self-signup: false
+      permissions:
+        leads.read: Read demo requests from the website
+        erp.read: Read ERP customers, products, sync history and health
+        erp.sync: Run customer and product syncs
+        ai.query: Ask the AI engine about ERP data
+      roles:
+        admin: { name: Runvance admin, permissions: ["*"] }

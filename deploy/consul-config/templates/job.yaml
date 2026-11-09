@@ -1,0 +1,75 @@
+{{- /*
+Runs after every Sync (and every Rollback) once the ConfigMap and the token are in place: rebuilds
+config/ and scripts/ from the ConfigMap, then scripts/sync.sh --prune, which validates first
+(scripts/validate.py) and publishes nothing when validation fails. A failed job fails the sync
+(on-sync-failed notification). The last run stays for its logs until the next sync replaces it.
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: consul-config-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "consul-config.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.job.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "consul-config.labels" . | nindent 8 }}
+      annotations:
+        # Which configuration this run published (the ConfigMap's content).
+        checksum/files: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: consul-config-sync
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: sync
+          image: "{{ required "image.registry is required" .Values.image.registry }}/{{ .Values.image.repository }}:{{ required "image.tag is required (the release file)" .Values.image.tag }}"
+          command: ["bash", "-ceu"]
+          args:
+            - |
+              python3 - <<'PY'
+              import json, os, shutil
+              index = json.load(open("/bundle/index.json"))
+              for key, path in index.items():
+                  target = os.path.join("/work", path)
+                  os.makedirs(os.path.dirname(target), exist_ok=True)
+                  shutil.copyfile(os.path.join("/bundle", key), target)
+              print(f"{len(index)} files")
+              PY
+              exec bash /work/scripts/sync.sh{{ if .Values.prune }} --prune{{ end }}
+          env:
+            - { name: CONSUL_HTTP_ADDR, value: {{ .Values.consul.address | quote }} }
+            - { name: HOME, value: /tmp }
+            - { name: PYTHONDONTWRITEBYTECODE, value: "1" }
+          envFrom:
+            - secretRef: { name: consul-config-loader }   # CONSUL_HTTP_TOKEN
+          resources:
+            {{- toYaml .Values.job.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: files, mountPath: /bundle, readOnly: true }
+            - { name: work, mountPath: /work }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: files
+          configMap: { name: consul-config-files }
+        - name: work
+          emptyDir: { sizeLimit: 32Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 32Mi }

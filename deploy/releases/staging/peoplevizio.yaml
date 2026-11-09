@@ -1,0 +1,13 @@
+# peoplevizio in staging: what Argo CD deploys when someone presses Sync on peoplevizio-staging.
+# Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
+# History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
+#
+#   hrms-api  acrinterviewaistaging.azurecr.io/hrms-api:(none)
+#   hrms-web  acrinterviewaistaging.azurecr.io/hrms-web:(none)
+releaseOf: peoplevizio
+# Not released yet: no Application until a release names the chart's commit.
+chartRevision: "unreleased"
+# Chart values (this file is the chart's last value file): the image tags.
+common:
+  image:
+    tag: ""

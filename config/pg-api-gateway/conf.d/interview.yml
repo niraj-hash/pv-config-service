@@ -1,0 +1,1161 @@
+# Runvance Interview (repo interview-ai-management, pv-auth-service product key "interview"): its public hosts, routes and RBAC rules.
+# pg-api-gateway signs people in with pv-auth-service, applies these rules and passes the identity as X-PV-* headers;
+# the service (Consul: interview-api) has no sign-in or role checks of its own. Roles and permissions: the interview
+# catalog in config/pv-auth-service/conf.d/interview.yml.
+#
+# The per-endpoint rules are GENERATED from the backend's former @PreAuthorize annotations (one rule per path and
+# method set, the same permissions, any of them). Runvance Interview's GatewayRulesCoverEveryEndpointTest fails when a
+# controller endpoint has no rule here, when a rule matches no endpoint, or when an API-key endpoint's scopes differ
+# from its rule. Old checks that needed two permissions at once ("a and b") are the first permission here and the
+# rest in the service (Actor.requireAny), because a rule allows any of its permissions.
+#
+# Two gateway entries, because every route of an entry applies to all of its hosts:
+#   interview      the web app (staff app, candidate pages) and the API people use, behind sign-in. Capability links
+#                  (/api/v1/join, /panel-access, /schedule: the token in the path), the candidate portal API (icp_
+#                  sessions, ipa_ assertions) and the public job board are anonymous: the service checks them.
+#   interview-api  the API host for machines: customers' iak_ API keys on the public API (anonymous here: the service
+#                  checks the key, its organization and its scopes; people's tokens are not accepted), provider
+#                  webhooks (signatures checked by the service), the HMAC-signed media-ingest WebSocket.
+# /internal/** (cell service token) and /actuator/** are never routed. /scim/** is gone (SCIM is not supported).
+# One cell (CELLS unset): a second cell would be its own Consul service (interview-api-<cell>) with its own entry
+# and hosts, since the gateway routes by host and path, not by organization.
+pv:
+  gateway:
+    products:
+      interview:
+        name: Runvance Interview
+        hosts: [interview.runvance.com, interview.localhost]
+        browser-sign-in: true
+        routes:
+          # Server-sent events: live transcript, coding pads, captions. No response timeout.
+          - id: interview-sse
+            upstream: lb://interview-api
+            paths: ["/api/v1/interviews/{id}/live", "/api/v1/interviews/{id}/pad/stream", "/api/v1/join/{token}/captions/stream", "/api/v1/join/{token}/pad/stream", "/api/v1/panel-access/{token}/pad/stream"]
+            access: PROTECTED
+            default-rule: DENY
+            response-timeout-ms: -1
+            rules:
+              - paths: ["/api/v1/interviews/{id}/pad/stream"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/live"]
+                methods: [GET]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/join/{token}/captions/stream"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/join/{token}/pad/stream"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/panel-access/{token}/pad/stream"]
+                methods: [GET]
+                anonymous: true
+            # Each stream (re)connect takes a token from the same buckets as the link's or the person's other calls
+            # (they were the service's CapabilityRateLimitFilter and StaffRateLimitFilter; see docs/rate-limits.md).
+            rate-limits:
+              - { bucket: interview-link, key: GUEST, path-variable: token, paths: ["/api/v1/join/{token}/captions/stream"], replenish-rate: 1, burst-capacity: 60, requested-tokens: 2 }
+              - { bucket: interview-link-ip, key: CLIENT_IP, paths: ["/api/v1/join/{token}/captions/stream"], replenish-rate: 2, burst-capacity: 120 }
+              - { bucket: interview-pad-link, key: GUEST, path-variable: token, paths: ["/api/v1/join/{token}/pad/stream", "/api/v1/panel-access/{token}/pad/stream"], replenish-rate: 25, burst-capacity: 300 }
+              - { bucket: interview-pad-ip, key: CLIENT_IP, paths: ["/api/v1/join/{token}/pad/stream", "/api/v1/panel-access/{token}/pad/stream"], replenish-rate: 50, burst-capacity: 600 }
+              - { bucket: interview-staff-user, key: USER, paths: ["/api/v1/interviews/{id}/live", "/api/v1/interviews/{id}/pad/stream"], replenish-rate: 10, burst-capacity: 600 }
+              - { bucket: interview-staff-org, key: ORG, paths: ["/api/v1/interviews/{id}/live", "/api/v1/interviews/{id}/pad/stream"], replenish-rate: 100, burst-capacity: 6000 }
+          # Capability links: the random, hashed, expiring token in the path is the credential (the service resolves
+          # it and answers 404 otherwise). Limits per link and per client address below.
+          - id: interview-capability
+            upstream: lb://interview-api
+            paths: ["/api/v1/join/**", "/api/v1/panel-access/**", "/api/v1/schedule/**"]
+            access: PROTECTED
+            default-rule: DENY
+            max-body-bytes: 11534336        # spoken answers (multipart, 11 MB as the service accepts)
+            response-timeout-ms: 120000
+            rules:
+              - paths: ["/api/v1/join/**", "/api/v1/panel-access/**", "/api/v1/schedule/**"]
+                anonymous: true
+            # Was the service's CapabilityRateLimitFilter. A link: 30 at once, then one every two seconds per link, 120 then
+            # two a second per client address. The coding pad (a batched edit every 50-100 ms) has its own buckets instead:
+            # 300 then 25 a second per link, 600 then 50 a second per address.
+            rate-limits:
+              - bucket: interview-link
+                key: GUEST
+                path-variable: token
+                paths: ["/api/v1/schedule/{token}:book", "/api/v1/schedule/{token}", "/api/v1/join/{token}/**", "/api/v1/panel-access/{token}/**"]
+                exclude-paths: &interview-pad ["/api/v1/join/{token}/pad", "/api/v1/join/{token}/pad/**", "/api/v1/panel-access/{token}/pad", "/api/v1/panel-access/{token}/pad/**"]
+                replenish-rate: 1
+                burst-capacity: 60
+                requested-tokens: 2
+              - bucket: interview-link-ip
+                key: CLIENT_IP
+                exclude-paths: *interview-pad
+                replenish-rate: 2
+                burst-capacity: 120
+              - { bucket: interview-pad-link, key: GUEST, path-variable: token, paths: *interview-pad, replenish-rate: 25, burst-capacity: 300 }
+              - { bucket: interview-pad-ip, key: CLIENT_IP, paths: *interview-pad, replenish-rate: 50, burst-capacity: 600 }
+          # The candidate portal API: candidates are not organization members. icp_ sessions (emailed code or magic
+          # link) and ipa_ portal assertions are checked by the service; only the sign-in steps work without one.
+          - id: interview-candidate
+            upstream: lb://interview-api
+            paths: ["/candidate-api/v1/**"]
+            access: PROTECTED
+            default-rule: DENY
+            max-body-bytes: 11534336        # resumes with a careers application
+            rules:
+              - paths: ["/candidate-api/v1/**"]
+                anonymous: true
+            # Was the service's own, per client address (CandidateSignInService, CareersService); the per-email limits
+            # stay in the service (the address is in the body or the session). Sign-in start 30 an hour; code and link
+            # checks 60 per 10 minutes together; careers applications 30 an hour.
+            rate-limits:
+              - { key: CLIENT_IP, paths: ["/candidate-api/v1/auth/sign-in:start"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 120 }
+              - { key: CLIENT_IP, paths: ["/candidate-api/v1/auth/sign-in:verify-code", "/candidate-api/v1/auth/sign-in:verify-link"], methods: [POST], replenish-rate: 1, burst-capacity: 600, requested-tokens: 10 }
+              - { key: CLIENT_IP, paths: ["/candidate-api/v1/careers/{slug}/jobs/{jobId}/applications"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 120 }
+          # The public job board (careers pages, logos, apply start). Read by this site only: no CORS.
+          - id: interview-public
+            upstream: lb://interview-api
+            paths: ["/public/v1/orgs/**"]
+            access: PROTECTED
+            default-rule: DENY
+            rules:
+              - paths: ["/public/v1/orgs/{slug}/jobs"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/public/v1/orgs/{slug}/jobs/{jobId}/applications:start"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/public/v1/orgs/{slug}/jobs/{jobId}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/public/v1/orgs/{slug}/logo/{digest}"]
+                methods: [GET]
+                anonymous: true
+            # Was the service's own, per client address, one bucket for both hosts: reads 300 at once, then five a second
+            # (PublicRateLimitFilter); application starts 20 an hour (CareersService; its per-email limit stays there).
+            rate-limits:
+              - { bucket: interview-public-ip, key: CLIENT_IP, methods: [GET], replenish-rate: 5, burst-capacity: 300 }
+              - { bucket: interview-careers-start-ip, key: CLIENT_IP, paths: ["/public/v1/orgs/{slug}/jobs/{jobId}/applications:start"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 180 }
+          # Everything people do. Every endpoint is listed; anything else is refused.
+          - id: interview-app-api
+            upstream: lb://interview-api
+            paths: ["/api/**"]
+            access: PROTECTED
+            default-rule: DENY
+            max-body-bytes: 11534336        # uploads: resumes, CSV imports, logos (11 MB as the service accepts)
+            response-timeout-ms: 120000     # report PDFs and exports
+            # Was the service's StaffRateLimitFilter. Every call: 600 at once, then 10 a second per person, and 6000, then
+            # 100 a second per organization (the join-link reissue has its own limits in the service). Expensive calls
+            # take from a second pair of buckets as well: searches and aggregate reads 60 then 1 a second per person and
+            # 600 then 10 a second per organization; exports and imports 20 a minute per person, 200 per organization;
+            # AI drafts and runs 30 a minute per person, 300 per organization.
+            rate-limits:
+              - { bucket: interview-staff-user, key: USER, exclude-paths: ["/api/v1/interviews/{id}/join-link:reissue"], replenish-rate: 10, burst-capacity: 600 }
+              - { bucket: interview-staff-org, key: ORG, exclude-paths: ["/api/v1/interviews/{id}/join-link:reissue"], replenish-rate: 100, burst-capacity: 6000 }
+              - bucket: interview-search-user
+                key: USER
+                methods: [GET]
+                paths: &interview-search ["/api/v1/search", "/api/v1/backlog", "/api/v1/analytics/performance", "/api/v1/analytics/performance/by-job", "/api/v1/platform/audit-log"]
+                replenish-rate: 1
+                burst-capacity: 60
+              - { bucket: interview-search-org, key: ORG, methods: [GET], paths: *interview-search, replenish-rate: 10, burst-capacity: 600 }
+              - bucket: interview-export-user
+                key: USER
+                methods: [POST]
+                paths: &interview-export-post ["/api/v1/assessment-runs/{id}:export-pdf", "/api/v1/analytics/exports", "/api/v1/candidates:import"]
+                replenish-rate: 1
+                burst-capacity: 60
+                requested-tokens: 3
+              - bucket: interview-export-user
+                key: USER
+                methods: [GET]
+                paths: &interview-export-get ["/api/v1/fairness/export", "/api/v1/fairness/export.csv", "/api/v1/platform/regulated-features/export", "/api/v1/platform/audit-log:verify"]
+                replenish-rate: 1
+                burst-capacity: 60
+                requested-tokens: 3
+              - { bucket: interview-export-org, key: ORG, methods: [POST], paths: *interview-export-post, replenish-rate: 10, burst-capacity: 600, requested-tokens: 3 }
+              - { bucket: interview-export-org, key: ORG, methods: [GET], paths: *interview-export-get, replenish-rate: 10, burst-capacity: 600, requested-tokens: 3 }
+              - bucket: interview-ai-user
+                key: USER
+                methods: [POST]
+                paths: &interview-ai ["/api/v1/jobs/{id}:draft-description", "/api/v1/jobs/{id}/competency-framework-drafts", "/api/v1/interviews/{id}/kit:generate", "/api/v1/interviews/{id}/assessment:rerun", "/api/v1/resumes/{id}:parse", "/api/v1/platform/prompts/{key}/versions/{version}/eval-runs"]
+                replenish-rate: 1
+                burst-capacity: 60
+                requested-tokens: 2
+              - { bucket: interview-ai-org, key: ORG, methods: [POST], paths: *interview-ai, replenish-rate: 5, burst-capacity: 300 }
+            rules:
+              # ── /api/v1/ai-eval
+              - paths: ["/api/v1/ai-eval/review-tasks"]
+                methods: [GET]
+                permissions: [ai_eval.read]
+                roles: [super_admin]
+              - paths: ["/api/v1/ai-eval/promotions"]
+                methods: [GET]
+                permissions: [ai_eval.read]
+                roles: [super_admin]
+              - paths: ["/api/v1/ai-eval/prompts"]
+                methods: [GET]
+                permissions: [ai_eval.read]
+                roles: [super_admin]
+              - paths: ["/api/v1/ai-eval/review-tasks/{id}:resolve"]
+                methods: [POST]
+                permissions: [ai.config]
+              - paths: ["/api/v1/ai-eval/prompts/{key}/versions/{version}"]
+                methods: [GET]
+                permissions: [ai_eval.read]
+                roles: [super_admin]
+              # ── /api/v1/ai-jobs
+              - paths: ["/api/v1/ai-jobs/{id}"]
+                methods: [GET] # any signed-in member
+              # ── /api/v1/analytics
+              - paths: ["/api/v1/analytics/report-subscriptions"]
+                methods: [GET, POST]
+                permissions: [ai_eval.read, analytics.interviewers, analytics.read]
+              - paths: ["/api/v1/analytics/performance/by-job"]
+                methods: [GET]
+                permissions: [analytics.read]
+              - paths: ["/api/v1/analytics/interviewers/me"]
+                methods: [GET]
+                permissions: [scorecard.write]
+              - paths: ["/api/v1/analytics/applications"]
+                methods: [GET]
+                permissions: [analytics.read]
+              - paths: ["/api/v1/analytics/interviewers"]
+                methods: [GET]
+                permissions: [analytics.interviewers]
+              - paths: ["/api/v1/analytics/performance"]
+                methods: [GET]
+                permissions: [analytics.read]
+              - paths: ["/api/v1/analytics/ai-health"]
+                methods: [GET]
+                permissions: [ai_eval.read, analytics.read]
+              - paths: ["/api/v1/analytics/overview"]
+                methods: [GET]
+                permissions: [analytics.read]
+              - paths: ["/api/v1/analytics/exports"]
+                methods: [GET, POST]
+                permissions: [report.export]
+              - paths: ["/api/v1/analytics/report-subscriptions/{id}"]
+                methods: [DELETE]
+                permissions: [ai_eval.read, analytics.interviewers, analytics.read]
+              # ── /api/v1/api-key-scopes
+              - paths: ["/api/v1/api-key-scopes"]
+                methods: [GET]
+                permissions: [api_access.manage]
+              # ── /api/v1/api-keys
+              - paths: ["/api/v1/api-keys"]
+                methods: [GET, POST]
+                permissions: [api_access.manage]
+              - paths: ["/api/v1/api-keys/{id}/requests"]
+                methods: [GET]
+                permissions: [api_access.manage]
+              - paths: ["/api/v1/api-keys/{id}:revoke"]
+                methods: [POST]
+                permissions: [api_access.manage]
+              - paths: ["/api/v1/api-keys/{id}"]
+                methods: [GET]
+                permissions: [api_access.manage]
+              # ── /api/v1/applications
+              - paths: ["/api/v1/applications"]
+                methods: [GET]
+                permissions: [application.read]
+              - paths: ["/api/v1/applications"]
+                methods: [POST]
+                permissions: [application.write]
+              - paths: ["/api/v1/applications/{id}/screening:run"]
+                methods: [POST]
+                permissions: [application.write]
+              - paths: ["/api/v1/applications/{id}/decisions"]
+                methods: [POST]
+                permissions: [decision.make]
+              - paths: ["/api/v1/applications/{id}/decisions"]
+                methods: [GET]
+                permissions: [application.read, decision.make]
+              - paths: ["/api/v1/applications/{id}/screening"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/applications/{id}/history"]
+                methods: [GET]
+                permissions: [application.read]
+              - paths: ["/api/v1/applications/{id}:move"]
+                methods: [POST]
+                permissions: [application.move]
+              - paths: ["/api/v1/applications/{id}"]
+                methods: [GET]
+                permissions: [application.read]
+              - paths: ["/api/v1/applications/{id}/screening/items/{itemId}:review"]
+                methods: [POST]
+                permissions: [application.write, decision.make]
+              # ── /api/v1/assessment-frameworks
+              - paths: ["/api/v1/assessment-frameworks"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/assessment-frameworks"]
+                methods: [GET]
+                permissions: [job.read, settings.manage]
+              - paths: ["/api/v1/assessment-frameworks/{id}:new-version"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/assessment-frameworks/{id}:publish"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/assessment-frameworks/{id}"]
+                methods: [GET]
+                permissions: [job.read, settings.manage]
+              - paths: ["/api/v1/assessment-frameworks/{id}"]
+                methods: [PUT]
+                permissions: [settings.manage]
+              # ── /api/v1/assessment-runs
+              - paths: ["/api/v1/assessment-runs/{runId}:export-pdf"]
+                methods: [POST]
+                permissions: [assessment.export, report.export]
+              - paths: ["/api/v1/assessment-runs/{runId}"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/assessment-runs/{runId}/competencies/{competencyId}:override"]
+                methods: [POST]
+                permissions: [assessment.approve, decision.make]
+              - paths: ["/api/v1/assessment-runs/{runId}/insights/{insightId}:review"]
+                methods: [POST]
+                permissions: [assessment.read]
+              # ── /api/v1/audit-log
+              - paths: ["/api/v1/audit-log:verify"]
+                methods: [GET]
+                permissions: [audit.read]
+              - paths: ["/api/v1/audit-log"]
+                methods: [GET]
+                permissions: [audit.read]
+              # ── /api/v1/backlog
+              - paths: ["/api/v1/backlog"]
+                methods: [GET]
+                permissions: [report.read]
+              - paths: ["/api/v1/backlog/{kind}"]
+                methods: [GET]
+                permissions: [report.read]
+              # ── /api/v1/calibration
+              - paths: ["/api/v1/calibration/eligible-interviews"]
+                methods: [GET]
+                permissions: [calibration.manage]
+              - paths: ["/api/v1/calibration/eligible-raters"]
+                methods: [GET]
+                permissions: [calibration.manage]
+              # ── /api/v1/calibration-sessions
+              - paths: ["/api/v1/calibration-sessions"]
+                methods: [POST]
+                permissions: [calibration.manage]
+              - paths: ["/api/v1/calibration-sessions"]
+                methods: [GET]
+                permissions: [calibration.manage, scorecard.write]
+              - paths: ["/api/v1/calibration-sessions/{id}/results"]
+                methods: [GET]
+                permissions: [calibration.manage, scorecard.write]
+              - paths: ["/api/v1/calibration-sessions/{id}:submit"]
+                methods: [POST]
+                permissions: [scorecard.write]
+              - paths: ["/api/v1/calibration-sessions/{id}:close"]
+                methods: [POST]
+                permissions: [calibration.manage]
+              - paths: ["/api/v1/calibration-sessions/{id}"]
+                methods: [GET]
+                permissions: [calibration.manage, scorecard.write]
+              - paths: ["/api/v1/calibration-sessions/{id}/items/{itemId}/ratings/mine"]
+                methods: [PUT]
+                permissions: [scorecard.write]
+              - paths: ["/api/v1/calibration-sessions/{id}/items/{itemId}"]
+                methods: [GET]
+                permissions: [scorecard.write]
+              # ── /api/v1/candidates
+              - paths: ["/api/v1/candidates:import"]
+                methods: [POST]
+                permissions: [candidate.write]
+              - paths: ["/api/v1/candidates"]
+                methods: [POST]
+                permissions: [candidate.write]
+              - paths: ["/api/v1/candidates"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/candidates/{id}/profile:confirm-skills"]
+                methods: [POST]
+                permissions: [candidate.write]
+              - paths: ["/api/v1/candidates/{id}/privacy-requests"]
+                methods: [GET, POST]
+                permissions: [privacy.process]
+              - paths: ["/api/v1/candidates/{id}/timeline"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/candidates/{id}/profile"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/candidates/{id}/reports"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/candidates/{id}/resumes"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/candidates/{id}/resumes"]
+                methods: [POST]
+                permissions: [candidate.write]
+              - paths: ["/api/v1/candidates/{id}"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/candidates/{id}"]
+                methods: [PATCH]
+                permissions: [candidate.write]
+              # ── /api/v1/coding-pad
+              - paths: ["/api/v1/coding-pad/policy"]
+                methods: [GET]
+                permissions: [interview.join, interview.schedule, settings.manage]
+              # ── /api/v1/competencies
+              - paths: ["/api/v1/competencies"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/competencies"]
+                methods: [GET]
+                permissions: [job.read, settings.manage]
+              - paths: ["/api/v1/competencies/{id}/rubrics"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/competencies/{id}"]
+                methods: [PATCH]
+                permissions: [settings.manage]
+              # ── /api/v1/competency-packs
+              - paths: ["/api/v1/competency-packs"]
+                methods: [GET]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/competency-packs/{pack}:import"]
+                methods: [POST]
+                permissions: [settings.manage]
+              # ── /api/v1/consent-notices
+              - paths: ["/api/v1/consent-notices/recommended"]
+                methods: [GET]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/consent-notices"]
+                methods: [GET]
+                permissions: [consent.read, settings.manage]
+              - paths: ["/api/v1/consent-notices"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/consent-notices/{purpose}/versions"]
+                methods: [GET]
+                permissions: [consent.read, settings.manage]
+              # ── /api/v1/dashboard
+              - paths: ["/api/v1/dashboard/interview-status"]
+                methods: [GET]
+                permissions: [report.read]
+              - paths: ["/api/v1/dashboard"]
+                methods: [GET]
+                permissions: [report.read]
+              # ── /api/v1/decisions
+              - paths: ["/api/v1/decisions/{id}:cancel-message"]
+                methods: [POST]
+                permissions: [decision.make]
+              # ── /api/v1/fairness
+              - paths: ["/api/v1/fairness/export.csv"]
+                methods: [GET]
+                permissions: [fairness.report]
+              - paths: ["/api/v1/fairness/alerts"]
+                methods: [GET]
+                permissions: [fairness.report]
+              - paths: ["/api/v1/fairness/export"]
+                methods: [GET]
+                permissions: [fairness.report]
+              - paths: ["/api/v1/fairness/report"]
+                methods: [GET]
+                permissions: [fairness.report]
+              - paths: ["/api/v1/fairness/alerts/{id}:acknowledge"]
+                methods: [POST]
+                permissions: [fairness.report]
+              # ── /api/v1/integrations
+              - paths: ["/api/v1/integrations/slack:install-url"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/teams:install-url"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/slack:complete"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/teams:complete"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats/settings"]
+                methods: [PATCH]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats/issues"]
+                methods: [GET]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats/pushes"]
+                methods: [GET]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats/runs"]
+                methods: [GET]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats:sync"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats:test"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/slack"]
+                methods: [GET] # any signed-in member
+              - paths: ["/api/v1/integrations/slack"]
+                methods: [DELETE]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/teams"]
+                methods: [GET] # any signed-in member
+              - paths: ["/api/v1/integrations/teams"]
+                methods: [DELETE]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats"]
+                methods: [GET, PUT, DELETE]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats/issues/{id}:resolve"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/integrations/ats/pushes/{id}:retry"]
+                methods: [POST]
+                permissions: [settings.manage]
+              # ── /api/v1/interviewers
+              - paths: ["/api/v1/interviewers"]
+                methods: [GET]
+                permissions: [interview.schedule]
+              # ── /api/v1/interviews
+              - paths: ["/api/v1/interviews"]
+                methods: [GET]
+                permissions: [interview.read]
+              - paths: ["/api/v1/interviews"]
+                methods: [POST]
+                permissions: [interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/recording-acknowledgement"]
+                methods: [POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/transcript-review:attest"]
+                methods: [POST]
+                permissions: [assessment.approve, decision.make]
+              - paths: ["/api/v1/interviews/{id}/debrief-brief:generate"]
+                methods: [POST]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/interviews/{id}/scorecards/mine:submit"]
+                methods: [POST]
+                permissions: [scorecard.write]
+              - paths: ["/api/v1/interviews/{id}/conversation-metrics"]
+                methods: [GET]
+                permissions: [assessment.read, transcript.read]
+              - paths: ["/api/v1/interviews/{id}/copilot/suggestions"]
+                methods: [POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/transcript:simulate"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/integrity-signals"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/join-link:reissue"]
+                methods: [POST]
+                permissions: [interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/screen-share:stop"]
+                methods: [POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/transcript-review"]
+                methods: [GET]
+                permissions: [assessment.read, decision.make, transcript.read]
+              - paths: ["/api/v1/interviews/{id}/assessment:rerun"]
+                methods: [POST]
+                permissions: [assessment.run]
+              - paths: ["/api/v1/interviews/{id}/copilot/settings"]
+                methods: [PUT]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/assessment-runs"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/interviews/{id}/recording:start"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/scorecards/mine"]
+                methods: [GET, PUT]
+                permissions: [scorecard.write]
+              - paths: ["/api/v1/interviews/{id}/recording:stop"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/debrief-brief"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/interviews/{id}/pad/snapshots"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/kit:generate"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/pad/language"]
+                methods: [PUT]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/pad/snapshot"]
+                methods: [PUT]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/session:join"]
+                methods: [POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/kit:approve"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/kit:discard"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/pad/updates"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/assessment"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/interviews/{id}/notes/mine"]
+                methods: [GET, PUT]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/recordings"]
+                methods: [GET]
+                permissions: [recording.download, recording.read]
+              - paths: ["/api/v1/interviews/{id}/scorecards"]
+                methods: [GET]
+                permissions: [scorecard.read_all, scorecard.write]
+              - paths: ["/api/v1/interviews/{id}/transcript"]
+                methods: [GET]
+                permissions: [assessment.read, transcript.read]
+              - paths: ["/api/v1/interviews/{id}:reschedule"]
+                methods: [POST]
+                permissions: [interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/pad/runs"]
+                methods: [GET, POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}:complete"]
+                methods: [POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/copilot"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/markers"]
+                methods: [GET, POST]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/session"]
+                methods: [GET]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}:cancel"]
+                methods: [POST]
+                permissions: [interview.cancel]
+              - paths: ["/api/v1/interviews/{id}/kit"]
+                methods: [GET]
+                permissions: [interview.join, interview.read]
+              - paths: ["/api/v1/interviews/{id}/kit"]
+                methods: [PUT]
+                permissions: [interview.join, interview.schedule]
+              - paths: ["/api/v1/interviews/{id}/pad"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}"]
+                methods: [GET]
+                permissions: [interview.join, interview.read]
+              - paths: ["/api/v1/interviews/{id}/copilot/suggestions/{suggestionId}:dismiss"]
+                methods: [POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/copilot/suggestions/{suggestionId}:use"]
+                methods: [POST]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/recordings/{recordingId}:download-url"]
+                methods: [POST]
+                permissions: [recording.download]
+              - paths: ["/api/v1/interviews/{id}/recordings/{recordingId}/media"]
+                methods: [GET]
+                permissions: [recording.read]
+              - paths: ["/api/v1/interviews/{id}/pad/snapshots/{snapshotId}"]
+                methods: [GET]
+                permissions: [interview.join]
+              - paths: ["/api/v1/interviews/{id}/pad/updates/{updateId}"]
+                methods: [PUT]
+                permissions: [interview.join]
+              # ── /api/v1/jobs
+              - paths: ["/api/v1/jobs"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs"]
+                methods: [GET]
+                permissions: [job.read]
+              - paths: ["/api/v1/jobs/{id}/competency-framework-drafts"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/screening-summaries"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/jobs/{id}:draft-description"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/self-scheduling"]
+                methods: [PUT, DELETE]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/self-scheduling"]
+                methods: [GET]
+                permissions: [job.read]
+              - paths: ["/api/v1/jobs/{id}/comparison.csv"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/jobs/{id}/resume-imports"]
+                methods: [POST]
+                permissions: [candidate.write]
+              - paths: ["/api/v1/jobs/{id}/resume-imports"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/jobs/{id}/comparison"]
+                methods: [GET]
+                permissions: [assessment.read]
+              - paths: ["/api/v1/jobs/{id}/ai-drafts"]
+                methods: [GET]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}:unarchive"]
+                methods: [POST]
+                permissions: [job.publish]
+              - paths: ["/api/v1/jobs/{id}/pipeline"]
+                methods: [GET]
+                permissions: [job.read]
+              - paths: ["/api/v1/jobs/{id}/pipeline"]
+                methods: [PUT, DELETE]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/members"]
+                methods: [GET]
+                permissions: [job.read]
+              - paths: ["/api/v1/jobs/{id}:archive"]
+                methods: [POST]
+                permissions: [job.publish]
+              - paths: ["/api/v1/jobs/{id}:publish"]
+                methods: [POST]
+                permissions: [job.publish]
+              - paths: ["/api/v1/jobs/{id}:reopen"]
+                methods: [POST]
+                permissions: [job.publish]
+              - paths: ["/api/v1/jobs/{id}/draft"]
+                methods: [PUT]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}:close"]
+                methods: [POST]
+                permissions: [job.publish]
+              - paths: ["/api/v1/jobs/{id}:hold"]
+                methods: [POST]
+                permissions: [job.publish]
+              - paths: ["/api/v1/jobs/{id}"]
+                methods: [PATCH, DELETE]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}"]
+                methods: [GET]
+                permissions: [job.read]
+              - paths: ["/api/v1/jobs/{id}/competency-framework-drafts/{aiJobId}:apply"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/resume-imports/{importId}/files"]
+                methods: [POST]
+                permissions: [candidate.write]
+              - paths: ["/api/v1/jobs/{id}/rounds/{roundId}/kit:generate"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/rounds/{roundId}/kit:approve"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/rounds/{roundId}/kit:discard"]
+                methods: [POST]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/resume-imports/{importId}"]
+                methods: [GET]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/jobs/{id}/rounds/{roundId}/kit"]
+                methods: [GET]
+                permissions: [job.read]
+              - paths: ["/api/v1/jobs/{id}/rounds/{roundId}/kit"]
+                methods: [PUT]
+                permissions: [job.write]
+              - paths: ["/api/v1/jobs/{id}/members/{userId}"]
+                methods: [PUT, DELETE]
+                permissions: [job.write]
+              # ── /api/v1/me
+              - paths: ["/api/v1/me/push-subscriptions:remove"]
+                methods: [POST] # any signed-in member
+              - paths: ["/api/v1/me/notification-preferences"]
+                methods: [GET, PUT] # any signed-in member
+              - paths: ["/api/v1/me/calendar:connect-url"]
+                methods: [POST] # any signed-in member
+              - paths: ["/api/v1/me/push-subscriptions"]
+                methods: [POST] # any signed-in member
+              - paths: ["/api/v1/me/calendar:complete"]
+                methods: [POST] # any signed-in member
+              - paths: ["/api/v1/me/working-hours"]
+                methods: [PUT] # any signed-in member
+              - paths: ["/api/v1/me/phone:verify"]
+                methods: [POST] # any signed-in member
+              - paths: ["/api/v1/me/interviews"]
+                methods: [GET]
+                permissions: [interview.join, interview.read]
+              - paths: ["/api/v1/me/scorecards"]
+                methods: [GET]
+                permissions: [scorecard.write]
+              - paths: ["/api/v1/me/calendar"]
+                methods: [GET, DELETE] # any signed-in member
+              - paths: ["/api/v1/me/phone"]
+                methods: [PUT, DELETE] # any signed-in member
+              - paths: ["/api/v1/me"]
+                methods: [GET] # any signed-in member
+              # ── /api/v1/members
+              - paths: ["/api/v1/members"]
+                methods: [GET]
+                permissions: [user.manage]
+              # ── /api/v1/organization
+              - paths: ["/api/v1/organization/regulated-features/history"]
+                methods: [GET]
+                permissions: [audit.read, organization.manage]
+              - paths: ["/api/v1/organization/regulated-features"]
+                methods: [GET]
+                permissions: [ai_eval.read, audit.read, organization.manage, settings.manage]
+              - paths: ["/api/v1/organization/reminder-settings"]
+                methods: [GET, PUT]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/organization/platform-access"]
+                methods: [GET]
+                permissions: [organization.manage]
+              - paths: ["/api/v1/organization/ai-usage"]
+                methods: [GET]
+                permissions: [analytics.read, billing.manage, organization.manage]
+              - paths: ["/api/v1/organization/pipeline"]
+                methods: [GET]
+                permissions: [job.read, settings.manage]
+              - paths: ["/api/v1/organization/pipeline"]
+                methods: [PUT]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/organization/logo"]
+                methods: [GET]
+                permissions: [organization.manage, settings.manage]
+              - paths: ["/api/v1/organization/logo"]
+                methods: [POST, DELETE]
+                permissions: [organization.manage]
+              - paths: ["/api/v1/organization"]
+                methods: [GET] # any signed-in member
+              - paths: ["/api/v1/organization"]
+                methods: [PATCH]
+                permissions: [organization.manage]
+              - paths: ["/api/v1/organization/regulated-features/{key}"]
+                methods: [PUT]
+                permissions: [organization.manage]
+              # ── /api/v1/pipeline-stages
+              - paths: ["/api/v1/pipeline-stages"]
+                methods: [GET]
+                permissions: [job.read]
+              # ── /api/v1/platform
+              - paths: ["/api/v1/platform/regulated-features/export"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/compliance/access-review"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/compliance/audit-chains"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-features"]
+                methods: [GET, POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/audit-log:verify"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/audit-log"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompts"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-feature-approvals/{id}:approve"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-feature-approvals/{id}:cancel"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-feature-approvals/{id}:reject"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/candidate-access"]
+                methods: [GET, POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/pipeline-summary"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-features/{key}/approvals"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-features/{key}/history"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/regulated-features/{key}:suspend"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompt-promotions/{id}:approve"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}:reactivate"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompt-promotions/{id}:cancel"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompt-promotions/{id}:reject"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/vacancies"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/ai-usage"]
+                methods: [GET, PATCH]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}:suspend"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/logo"]
+                methods: [GET, POST, DELETE]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}"]
+                methods: [GET, PATCH]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/candidate-access/{grantId}/candidates"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/organizations/{id}/candidate-access/{grantId}:revoke"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompts/{key}/versions/{version}/promotions"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompts/{key}/versions/{version}/eval-runs"]
+                methods: [GET, POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompts/{key}/versions/{version}:activate"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/prompts/{key}/versions/{version}:traffic"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              # ── /api/v1/privacy-requests
+              - paths: ["/api/v1/privacy-requests"]
+                methods: [GET]
+                permissions: [privacy.process]
+              - paths: ["/api/v1/privacy-requests/{id}:download-url"]
+                methods: [POST]
+                permissions: [privacy.process]
+              # ── /api/v1/questions
+              - paths: ["/api/v1/questions"]
+                methods: [POST]
+                permissions: [job.write, settings.manage]
+              - paths: ["/api/v1/questions"]
+                methods: [GET]
+                permissions: [interview.read, job.write, settings.manage]
+              - paths: ["/api/v1/questions/{id}:archive"]
+                methods: [POST]
+                permissions: [job.write, settings.manage]
+              - paths: ["/api/v1/questions/{id}:copy"]
+                methods: [POST]
+                permissions: [job.write, settings.manage]
+              - paths: ["/api/v1/questions/{id}"]
+                methods: [GET]
+                permissions: [interview.read, job.write, settings.manage]
+              - paths: ["/api/v1/questions/{id}"]
+                methods: [PATCH]
+                permissions: [job.write, settings.manage]
+              # ── /api/v1/regulated-features
+              - paths: ["/api/v1/regulated-features/enabled"]
+                methods: [GET] # any signed-in member
+              # ── /api/v1/report-exports
+              - paths: ["/api/v1/report-exports/{id}:download-url"]
+                methods: [POST]
+                permissions: [assessment.export, report.export]
+              - paths: ["/api/v1/report-exports/{id}"]
+                methods: [GET]
+                permissions: [assessment.export, report.export]
+              # ── /api/v1/resumes
+              - paths: ["/api/v1/resumes/{id}:download-url"]
+                methods: [POST]
+                permissions: [candidate.read]
+              - paths: ["/api/v1/resumes/{id}:parse"]
+                methods: [POST]
+                permissions: [candidate.write]
+              # ── /api/v1/scheduling
+              - paths: ["/api/v1/scheduling/slots"]
+                methods: [GET]
+                permissions: [interview.schedule]
+              # ── /api/v1/scheduling-requests
+              - paths: ["/api/v1/scheduling-requests"]
+                methods: [POST]
+                permissions: [interview.schedule]
+              # ── /api/v1/scorecards
+              - paths: ["/api/v1/scorecards/{id}:amend"]
+                methods: [POST]
+                permissions: [scorecard.write]
+              # ── /api/v1/search
+              - paths: ["/api/v1/search"]
+                methods: [GET] # any signed-in member
+              # ── /api/v1/settings
+              - paths: ["/api/v1/settings/notification-channels"]
+                methods: [GET, PUT]
+                permissions: [settings.manage]
+              # ── /api/v1/usage
+              - paths: ["/api/v1/usage/daily"]
+                methods: [GET]
+                permissions: [analytics.read, billing.manage]
+              # ── /api/v1/webhook-event-types
+              - paths: ["/api/v1/webhook-event-types"]
+                methods: [GET]
+                permissions: [settings.manage]
+              # ── /api/v1/webhooks
+              - paths: ["/api/v1/webhooks"]
+                methods: [GET, POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/webhooks/{id}:rotate-secret"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/webhooks/{id}/deliveries"]
+                methods: [GET]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/webhooks/{id}:enable"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/webhooks/{id}:test"]
+                methods: [POST]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/webhooks/{id}"]
+                methods: [GET, PUT, DELETE]
+                permissions: [settings.manage]
+              - paths: ["/api/v1/webhooks/{id}/deliveries/{deliveryId}:replay"]
+                methods: [POST]
+                permissions: [settings.manage]
+          - id: interview-web
+            access: PUBLIC
+            upstream: ${INTERVIEW_WEB_URI:lb://interview-web}
+
+      interview-api:
+        name: Runvance Interview API
+        hosts: [api.interview.runvance.com, api.interview.localhost]
+        browser-sign-in: false
+        routes:
+          # Live media from the interview room: the signed, expiring URL (SignedUrls, HMAC) is the credential.
+          - id: interview-api-media
+            upstream: lb://interview-api
+            paths: ["/media/ingest"]
+            access: PROTECTED
+            response-timeout-ms: -1
+            rules:
+              - paths: ["/media/ingest"]
+                anonymous: true
+          # Provider callbacks, each verified by its provider's signature in the service (LiveKit, Slack, Teams Bot
+          # Connector JWT, the ATS connection's secret). No SMS or WhatsApp provider callbacks: those go through Runvance Notify.
+          - id: interview-api-webhooks
+            upstream: lb://interview-api
+            paths: ["/api/v1/webhooks/ats/{tenantId}/{connectionId}", "/api/v1/webhooks/livekit", "/api/v1/webhooks/slack", "/api/v1/webhooks/teams"]
+            access: PROTECTED
+            default-rule: DENY
+            rules:
+              - paths: ["/api/v1/webhooks/ats/{tenantId}/{connectionId}", "/api/v1/webhooks/livekit", "/api/v1/webhooks/slack", "/api/v1/webhooks/teams"]
+                methods: [POST]
+                anonymous: true
+          # The public job board, as the API host always served it.
+          - id: interview-api-public
+            upstream: lb://interview-api
+            paths: ["/public/v1/orgs/**"]
+            access: PROTECTED
+            default-rule: DENY
+            rules:
+              - paths: ["/public/v1/orgs/{slug}/jobs"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/public/v1/orgs/{slug}/jobs/{jobId}/applications:start"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/public/v1/orgs/{slug}/jobs/{jobId}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/public/v1/orgs/{slug}/logo/{digest}"]
+                methods: [GET]
+                anonymous: true
+            # Was the service's own, per client address, one bucket for both hosts: reads 300 at once, then five a second
+            # (PublicRateLimitFilter); application starts 20 an hour (CareersService; its per-email limit stays there).
+            rate-limits:
+              - { bucket: interview-public-ip, key: CLIENT_IP, methods: [GET], replenish-rate: 5, burst-capacity: 300 }
+              - { bucket: interview-careers-start-ip, key: CLIENT_IP, paths: ["/public/v1/orgs/{slug}/jobs/{jobId}/applications:start"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 180 }
+          # The public API for customers' servers (ADR-0026): Authorization: Bearer iak_live_... API keys. Anonymous
+          # here, because the service checks each key itself (hash, organization, expiry, the creator still a member,
+          # per-key rate limit and request log) and only lets it reach @PublicApi operations whose scopes it holds,
+          # the same permissions as the rules above. A request without a valid key is refused by the service (401).
+          # Every other operation has no rule here and is refused.
+          - id: interview-api-keys
+            upstream: lb://interview-api
+            paths: ["/api/v1/**"]
+            access: PROTECTED
+            default-rule: DENY
+            max-body-bytes: 11534336
+            response-timeout-ms: 120000
+            # Was the service's own (ApiKeyAuthenticationFilter): 600 a minute per key, the default every key gets. A key
+            # created with a limit of its own (iam.api_key.rate_limit_per_minute) is held to it by the service.
+            rate-limit: { key: API_KEY, headers: [Authorization], replenish-rate: 10, burst-capacity: 600 }
+            rules:
+              - paths: ["/api/v1/applications"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/applications/{id}/decisions"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/applications/{id}:move"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/applications/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/candidates"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/candidates/{id}"]
+                methods: [GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/interviews"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/interviews/{id}/assessment"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/interviews/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/jobs"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/jobs/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/pipeline-stages"]
+                methods: [GET]
+                anonymous: true

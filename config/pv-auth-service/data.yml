@@ -1,0 +1,32 @@
+# pv-auth-service: non-secret settings. Each product's RBAC catalog (permissions, roles, origins,
+# self sign-up) is in conf.d/<product>.yml; scripts/sync.sh joins them into this key's YAML.
+# Secrets (AUTH_SIGNING_KEY_PEM, AUTH_DB_PASSWORD, AUTH_GATEWAY_CLIENT_SECRET, bootstrap
+# credentials) come from the environment.
+auth:
+  issuer: https://accounts.runvance.com
+  # One Runvance account for every app: every sign-in page and account email says whose it is.
+  brand:
+    name: Runvance
+    website: https://www.runvance.com
+    support-email: support@runvance.com
+  tokens:
+    access-token-minutes: 10
+    refresh-token-days: 14
+  lockout:
+    max-attempts: 5
+    minutes: 15
+  password-reset:
+    minutes: 30
+  gateway:
+    client-prefix: gateway-
+  messaging:
+    # Emails and texts (password resets, invitations, email confirmations) go through
+    # notification-service, found through Consul. Its API key for the platform's sender tenant
+    # comes from the environment (AUTH_NOTIFY_API_KEY).
+    notification:
+      base-url: lb://notification-service
+      timeout-seconds: 5
+  email-verification:
+    hours: 72
+  invitations:
+    days: 7

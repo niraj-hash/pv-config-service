@@ -1,0 +1,4 @@
+# Staging: aks-interviewai-staging; Key Vault kv-iai-staging behind the ClusterSecretStore azure-keyvault.
+environment: staging
+image:
+  registry: acrinterviewaistaging.azurecr.io

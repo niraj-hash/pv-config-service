@@ -1,0 +1,80 @@
+# Runvance Interview (interview-ai-management, spring.application.name interview-api): the configuration every
+# environment shares. The API and the worker read it (the worker is the same artifact with SPRING_PROFILES_ACTIVE
+# cloud,worker,<env>); an environment's differences are in config/interview-api,<env>/. Non-secret only: the database,
+# Redis, Kafka, LiveKit and field-key secrets and the product's pv-auth-service client secret come from Key Vault
+# through the chart's ExternalSecret. Deployment facts (database host, Redis and Kafka addresses, the storage account
+# and key vault of the cluster, the extractor's and ClamAV's in-cluster addresses) stay in the chart's
+# values-<env>.yaml. Safe local defaults stay in the service's application.yml.
+app:
+  # The public hosts pg-api-gateway answers for Interview (conf.d/interview.yml): links in emails and invites.
+  web-url: https://interview.runvance.com
+  transcription:
+    public-ingest-url: wss://api.interview.runvance.com/media/ingest
+    provider: ai-service              # live tracks, recordings and answer clips: ai-service's interview.* profiles
+    clip-provider: ai-service
+    source-url: true                  # recordings by a read-only Blob SAS link, the upload as fallback
+  video:
+    provider: livekit
+    livekit:
+      # LiveKit Cloud project "Runvance" (public endpoints; the API key and secret are Key Vault's).
+      url: wss://runvance-a32ngnqt.livekit.cloud
+      api-url: https://runvance-a32ngnqt.livekit.cloud
+      recording-bucket: recordings
+  storage:
+    provider: azure                   # AD-01: Azure Blob Storage with workload identity; the account is a deployment fact
+    region: centralindia
+    documents-bucket: documents       # container names (terraform modules/storage), the same in every account
+    quarantine-bucket: quarantine
+  # Platform services, through Consul (the same addresses as application.yml's defaults, stated for every environment).
+  ai-service:
+    url: lb://ai-service
+    token-url: lb://pv-auth-service/oauth2/token
+    client-id: interview-ai           # the product's one SERVICE client: scopes ai.invoke and comm.send
+  notify:
+    base-url: lb://notification-service
+    token-url: lb://pv-auth-service/oauth2/token
+    client-id: interview-ai
+    read-timeout: 30s                 # the shared notification-service time limiter
+  messaging:
+    # What Runvance Notify offers this product (notification-service config notify.products.interview.channels) once
+    # the platform's SMS and WhatsApp accounts exist; until then no text channel is offered (browser push follows
+    # Notify's own push key pair: offered as soon as Notify has one).
+    text-channels: ""
+    # template-key=meta_template_name[:language], once Meta approves the platform's templates (texts in the service's
+    # notifications/whatsapp/; variables are {{1}}, {{2}}... in order). Empty: WhatsApp is not sent.
+    whatsapp-templates: ""
+  ai:
+    prompts:
+      auto-activate: false            # promotion is an audited admin action (live eval + a second platform admin)
+  careers:
+    challenge:
+      allow-fake: false
+  assessment:
+    score-synthetic-transcripts: false
+
+# Outbound resilience (docs/platform-contract.md): the shared defaults and the platform services' instances are in
+# config/application/data.yml. Interview's own numbers, where its calls differ from them:
+resilience4j:
+  circuitbreaker:
+    instances:
+      ai-service:
+        # Completions and reads. Every call has its task class's deadline (app.ai.timeouts: 9 s live up to 410 s for
+        # scoring and summaries) and a timeout counts as a failure; a long scoring call is not ai-service failing.
+        slow-call-duration-threshold: 420s
+      ai-service-speech:
+        slow-call-duration-threshold: 25s       # app.ai.speech.timeout 20 s
+      ai-service-transcription:
+        slow-call-duration-threshold: 600s      # recordings up to PT9M (app.transcription.ai-service.recording-timeout)
+      storage:
+        slow-call-duration-threshold: 60s       # recordings and resumes are uploaded in one call
+      code-runner:
+        slow-call-duration-threshold: 30s       # a run's wall time (10 s) plus start and overhead
+      extractor:
+        slow-call-duration-threshold: 100s      # a document's 30 s plus the queue wait
+  timelimiter:
+    instances:
+      # Blocking clients: their read timeouts match these (the shared file's rule).
+      ai-service:
+        timeout-duration: 420s                  # the longest task deadline (app.ai.timeouts) plus the way there
+      ai-service-transcription:
+        timeout-duration: 600s

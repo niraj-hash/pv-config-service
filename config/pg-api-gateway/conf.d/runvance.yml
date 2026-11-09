@@ -1,0 +1,62 @@
+# Runvance Accelerator (runvance repo, accelerator/; Consul: runvance-accelerator; AKS namespace
+# runvance, chart accelerator/deploy/helm/runvance-accelerator). Was the public Azure App Service
+# runvance-api.azurewebsites.net with HTTP Basic / X-API-Key; now no credentials of its own.
+# Runvance staff (role admin in the platform organization) sign in here: in a browser (BFF, no web
+# UI of its own, but GET endpoints read fine) or with a pv-auth bearer token.
+# Not routed: /actuator/**, /h2-console/**.
+pv:
+  gateway:
+    products:
+      runvance:
+        name: Runvance Accelerator
+        hosts: [accelerator.runvance.com, runvance.localhost]
+        browser-sign-in: true
+        routes:
+          # The website's demo-request form (cross-origin), and listing the leads it collects.
+          - id: runvance-demo-requests
+            upstream: lb://runvance-accelerator
+            paths: ["/api/v1/demo-requests"]
+            access: PROTECTED
+            default-rule: DENY
+            rules:
+              - paths: ["/api/v1/demo-requests"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demo-requests"]
+                methods: [GET]
+                roles: [admin]
+                orgs: [platform]
+            # Ten form posts a minute per client address.
+            rate-limit:
+              key: CLIENT_IP
+              replenish-rate: 1
+              burst-capacity: 10
+              requested-tokens: 6
+              methods: [POST]
+            cors: # what the service allowed before (runvance.cors.allowed-origins)
+              allowed-origins: [https://runvance.com, https://www.runvance.com, http://localhost:3000, http://127.0.0.1:3000]
+              allowed-methods: [POST]
+              allowed-headers: [Content-Type]
+          - id: runvance-api
+            upstream: lb://runvance-accelerator
+            paths: ["/", "/api/**"]
+            access: PROTECTED
+            default-rule: DENY
+            response-timeout-ms: 120000 # Odoo syncs and queries (its odoo time limit: three 30 s attempts)
+            rules:
+              - paths: ["/"]
+                methods: [GET]
+                anonymous: true
+              # Inbound connector webhooks (only logged today; no signature checks yet).
+              - paths: ["/api/v1/webhooks/odoo", "/api/v1/webhooks/shopify", "/api/v1/webhooks/quickbooks"]
+                methods: [POST]
+                anonymous: true
+              # The admin API (was: any Basic-auth admin or X-API-Key caller).
+              - paths: ["/api/v1/health", "/api/v1/customers", "/api/v1/products", "/api/v1/sync/logs"]
+                methods: [GET]
+                roles: [admin]
+                orgs: [platform]
+              - paths: ["/api/v1/sync/customers", "/api/v1/sync/products", "/api/v1/ai/query"]
+                methods: [POST]
+                roles: [admin]
+                orgs: [platform]

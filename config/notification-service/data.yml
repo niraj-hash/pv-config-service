@@ -1,0 +1,85 @@
+# Runvance Notify (notification-service) as the platform's messaging service. Every Runvance
+# product sends its system messages (invitations, reminders, alerts, payslips, interview
+# schedules) through Notify's internal API, /internal/v1/** (never routed by pg-api-gateway), with
+# its pv-auth-service service token (scope comm.send) and X-PV-Org-Id. They go out from the
+# platform tenant under the product's name and are metered per product and organization. See
+# notification-service/docs/platform-messaging.md (how a product sends) and
+# docs/platform-messaging-survey.md (what each product sends today).
+#
+# Non-secret only. From the environment (Key Vault -> Kubernetes secrets): SENDGRID_API_KEY and
+# SENDGRID_FROM_ADDRESS (the platform sender, noreply@runvance.com), PLATFORM_TENANT_ID,
+# APP_ENCRYPTION_KEY, FCM_SERVICE_ACCOUNT_JSON (the Runvance Firebase project's service account),
+# VAPID_PRIVATE_KEY (the private half of the platform's Web Push key pair). The non-secret halves
+# (the VAPID public key and subject, the Firebase project id) belong in this file once they exist;
+# see the commented push block at the end. SMS and WhatsApp use the
+# platform tenant's provider configurations (Twilio / Azmarq, Meta), set in Notify's dashboard and
+# encrypted at rest.
+#
+# Plans and quotas for Notify's own customers are in conf.d/pricing.yml; they don't apply to the
+# products' messages, which have the per-organization limits below.
+notify:
+  internal:
+    issuer: https://accounts.runvance.com
+    # Through Consul, like the gateway's lb://pv-auth-service.
+    jwks-url: lb://pv-auth-service/oauth2/jwks
+    required-scope: comm.send
+  # A product's From address must be on one of these (verified in the platform's SendGrid account).
+  sender-domains: [runvance.com]
+  limits:
+    max-batch: 500                      # recipients in one batch request
+    max-attachments: 10                 # per email, the calendar invite included
+    max-attachment-bytes: 10485760      # 10 MB of files per email
+    max-batch-attachment-bytes: 26214400 # 25 MB per batch request (send large files one message each)
+    max-schedule-days: 90               # Connect schedules WhatsApp up to 90 days ahead
+    per-org-per-month: 100000           # messages per organization per product; a product may set its own
+  push:
+    max-devices-per-user: 10            # per product, organization and user; the oldest is dropped
+    default-ttl-seconds: 86400
+    web-push:
+      subject: mailto:support@runvance.com
+      allowed-hosts: [fcm.googleapis.com, updates.push.services.mozilla.com, .push.apple.com, .notify.windows.com]
+
+  # Products that may send, by pv-auth-service catalog key (the token's `product`). email.from-name
+  # is how the product signs its mail ("Runvance Payroll" <noreply@runvance.com>); from-address
+  # defaults to the platform sender. reply-to is where answers go (a send may name its own, e.g.
+  # the recruiter). channels limits what a product may use (empty = all); org-required: false only
+  # for products whose messages are for no organization.
+  products:
+    leados:
+      name: Runvance CRM
+      email: { from-name: Runvance CRM, reply-to: support@runvance.com }
+      # System messages only: the lead inbox (customers' own WhatsApp and email) stays in the CRM.
+      channels: [EMAIL]
+    payroll:
+      name: Runvance Payroll
+      email: { from-name: Runvance Payroll, reply-to: support@runvance.com }
+      channels: [EMAIL, SMS, WHATSAPP, PUSH, WEB_PUSH]
+    interview:
+      name: Runvance Interview
+      email: { from-name: Runvance Interview, reply-to: support@runvance.com }
+      channels: [EMAIL, SMS, WHATSAPP, PUSH, WEB_PUSH]
+    demoagent:
+      name: Runvance Connect
+      email: { from-name: Runvance Connect, reply-to: support@runvance.com }
+      # Email only: Connect's WhatsApp goes through Runvance CRM (the customer's own number).
+      channels: [EMAIL]
+    meet:
+      name: Runvance Meet
+      email: { from-name: Runvance Meet, reply-to: support@runvance.com }
+      channels: [EMAIL]
+      org-required: false               # meetings belong to people and client apps, not organizations
+    hms:
+      name: Runvance Health
+      email: { from-name: Runvance Health, reply-to: support@runvance.com }
+      channels: [EMAIL, SMS, WHATSAPP, PUSH, WEB_PUSH]
+    runvance:
+      name: Runvance
+      email: { from-name: Runvance }
+      channels: [EMAIL]
+      org-required: false               # the website's demo requests are for no organization
+
+# Push, once the Runvance Firebase project and VAPID key pair exist (non-secret parts only):
+# notify:
+#   push:
+#     fcm: { project-id: runvance-prod }
+#     web-push: { public-key: <base64url P-256 public key>, subject: "mailto:support@runvance.com" }

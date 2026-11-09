@@ -1,0 +1,5 @@
+# The tools image's build context, not part of the chart.
+image/
+.DS_Store
+*.swp
+*~

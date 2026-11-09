@@ -1,0 +1,31 @@
+# Runvance Notify (notification-service). The gateway's rules (pg-api-gateway conf.d/notification.yml)
+# check roles; permissions are passed on as X-PV-Permissions for reference.
+auth:
+  catalog:
+    notification:
+      name: Runvance Notify
+      origins: [https://notify.runvance.com, http://notify.localhost:8080] # gateway sign-in callbacks
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: Email, SMS and WhatsApp from one API
+        category: Developers
+        color: "#4338ca"
+        order: 70
+      self-signup: true           # sign-up creates an organization; Runvance Notify creates it a PENDING tenant
+      signup-role: tenant_admin
+      permissions:
+        notification.send: Send notifications
+        notification.read: Read notifications, reports and the audit log
+        template.manage: Manage templates
+        suppression.manage: Manage suppressions and consent
+        settings.manage: Manage channel providers, API keys and webhooks
+        tenant.manage: Approve, reject, suspend and reactivate tenants (platform)
+      roles:
+        tenant_admin:
+          name: Tenant admin
+          # org.members.manage: invites the team and sets their roles (pv-auth-service's team page).
+          permissions: [notification.send, notification.read, template.manage, suppression.manage, settings.manage, org.members.manage]
+        tenant_member:
+          name: Tenant member
+          permissions: [notification.send, notification.read, template.manage, suppression.manage]
+        super_admin: { name: Platform super admin, permissions: ["*"] } # assign in the platform org only

@@ -1,0 +1,113 @@
+# Runvance Meet (repo ai-demo-agent, meet/; pv-auth-service product key "meet"): its public hosts and RBAC rules.
+# pg-api-gateway signs people in with pv-auth-service, applies these rules and passes the identity as X-PV-* headers;
+# meet-api (Consul: meet-api) has no sign-in or role checks of its own. Catalog: config/pv-auth-service/conf.d/meet.yml.
+#
+# Two gateway entries, because every route of an entry applies to all of its hosts:
+#   meet      the web app (meet-web) and the API people use, behind sign-in. A person new to Meet is PENDING until a
+#             Meet super admin approves them; meet-api answers their meeting calls 403 PENDING_APPROVAL until then
+#             (a business rule of the product, so /api/v1/me is open to every signed-in person).
+#   meet-api  the API host for client platforms (LeadOS live demos, HR and interview tools): their own Meet API keys
+#             (Authorization: Bearer mk_...), which meet-api checks itself. Anonymous here, on the meeting endpoints
+#             only; pv-auth-service tokens are not accepted there. A separate host because people use the same paths
+#             with their session, and a PROTECTED path would reject an mk_ key as an invalid token.
+# Invite links (/j/<token> in the web app) are anonymous: the HMAC-signed token in the path is the credential.
+pv:
+  gateway:
+    products:
+      meet:
+        name: Runvance Meet
+        hosts: [meetings.runvance.com, meet.localhost]
+        browser-sign-in: true
+        routes:
+          - id: meet-people-api
+            upstream: lb://meet-api
+            paths: ["/api/v1/**"]
+            access: PROTECTED
+            default-rule: DENY
+            rules:
+              # Invite links: no account needed, meet-api checks the signed token (was permitAll /api/v1/public/**).
+              - paths: ["/api/v1/public/invites/{token}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/public/invites/{token}/join"]
+                methods: [POST]
+                anonymous: true
+              # Who am I, and where my request to join stands: every signed-in person, PENDING ones included.
+              - paths: ["/api/v1/me"]
+                methods: [GET]
+              - paths: ["/api/v1/me/request"]
+                methods: [PUT]
+              # A person's own meetings (was hasRole USER; meet-api also requires the person to be approved).
+              - paths: ["/api/v1/meetings"]
+                methods: [GET, POST]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}"]
+                methods: [GET, PATCH]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}/invites"]
+                methods: [GET, POST]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}/invites/{inviteId}"]
+                methods: [DELETE]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}/end", "/api/v1/meetings/{id}/cancel", "/api/v1/meetings/{id}/join",
+                        "/api/v1/meetings/{id}/shared-link/reset"]
+                methods: [POST]
+                permissions: [meeting.manage]
+              # The super admin console: approvals, platforms and their keys, oversight (was the env-configured
+              # superadmin, hasRole SUPERADMIN on /api/v1/superadmin/**). Platform organization only.
+              - paths: ["/api/v1/superadmin/overview", "/api/v1/superadmin/requests", "/api/v1/superadmin/users",
+                        "/api/v1/superadmin/apps", "/api/v1/superadmin/meetings", "/api/v1/superadmin/audit"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/superadmin/users/{id}/approve", "/api/v1/superadmin/users/{id}/reject",
+                        "/api/v1/superadmin/users/{id}/suspend", "/api/v1/superadmin/users/{id}/reactivate",
+                        "/api/v1/superadmin/apps", "/api/v1/superadmin/apps/{id}/rotate-key",
+                        "/api/v1/superadmin/apps/{id}/disable", "/api/v1/superadmin/apps/{id}/enable"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+            # Invite links, per client address: 60 at once, then one a second (the gateway's own ceiling).
+            rate-limit: { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 60, paths: ["/api/v1/public/**"] }
+            # The only limits on these requests (meet-api's own RateLimiter was removed on 2026-11-09): joining by invite
+            # link 60 per 10 minutes per client address; invitations 100 an hour per person.
+            rate-limits:
+              - { key: CLIENT_IP, paths: ["/api/v1/public/invites/{token}/join"], methods: [POST], replenish-rate: 1, burst-capacity: 600, requested-tokens: 10 }
+              - { key: USER, paths: ["/api/v1/meetings/{id}/invites"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 36 }
+          - id: meet-web
+            access: PUBLIC
+            upstream: ${MEET_WEB_URI:lb://meet-web}
+
+      meet-api:
+        name: Runvance Meet API
+        hosts: [meet-api.runvance.com, meet-api.localhost]
+        browser-sign-in: false
+        routes:
+          - id: meet-platform-api
+            upstream: lb://meet-api
+            paths: ["/api/v1/meetings", "/api/v1/meetings/**"]
+            access: PROTECTED
+            default-rule: DENY
+            # Every endpoint is anonymous here: callers are client platforms' servers with their mk_ key, which
+            # meet-api checks itself (key, platform enabled, its own meetings only). No valid key: 401 from meet-api.
+            # The only limit on invitations from platforms (meet-api's own RateLimiter was removed on 2026-11-09): 600 an
+            # hour per client platform (its one mk_ key).
+            rate-limit: { key: API_KEY, headers: [Authorization], paths: ["/api/v1/meetings/{id}/invites"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 6 }
+            rules:
+              - paths: ["/api/v1/meetings"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/meetings/{id}"]
+                methods: [GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/meetings/{id}/invites"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/meetings/{id}/invites/{inviteId}"]
+                methods: [DELETE]
+                anonymous: true
+              - paths: ["/api/v1/meetings/{id}/end", "/api/v1/meetings/{id}/cancel", "/api/v1/meetings/{id}/join",
+                        "/api/v1/meetings/{id}/shared-link/reset"]
+                methods: [POST]
+                anonymous: true

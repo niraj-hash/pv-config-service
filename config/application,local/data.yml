@@ -1,0 +1,8 @@
+# Local runs (SPRING_PROFILES_ACTIVE=local), for every service.
+spring:
+  cloud:
+    consul:
+      discovery:
+        # Consul in Docker Desktop can't always reach health checks on this machine: call any
+        # registered instance rather than only passing ones.
+        query-passing: false

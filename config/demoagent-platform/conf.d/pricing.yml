@@ -1,0 +1,47 @@
+# Runvance Connect plans and limits: the one place they are set.
+# Read only by this product (its own Consul token) and platform admins: never by the website or
+# any anonymous visitor. Prices are given on request. Change a price here, sync, restart the service:
+# it writes these plans into its own database at start-up (adding new plans, never deleting any),
+# and its superadmins can no longer edit prices in the app.
+#
+# Schema (scripts/validate.py checks it): currency (ISO 4217), tax-percent, per (what one price
+# is for, each month: organization | employee), plans.<CODE>: name, description, monthly and
+# yearly (major units, e.g. rupees; null = quoted on request), trial-days, order, recommended,
+# limits (the product's own keys; null = unlimited), features (shown to signed-in customers).
+# From the plans table (V100__core.sql), 2026-11-09. No paid price has ever been set: they are
+# quoted on request (null) until one is written here. The "internal" plan isn't sold and isn't listed.
+pv:
+  pricing:
+    product: demoagent
+    currency: INR
+    tax-percent: 18
+    per: organization
+    plans:
+      free:
+        name: Free
+        monthly: 0
+        yearly: null
+        trial-days: 0
+        order: 1
+        limits: { products: 1, agents: 1, demosPerMonth: 20, members: 3 }
+      starter:
+        name: Starter
+        monthly: null
+        yearly: null
+        trial-days: 0
+        order: 2
+        limits: { products: 3, agents: 5, demosPerMonth: 200, members: 10 }
+      growth:
+        name: Growth
+        monthly: null
+        yearly: null
+        trial-days: 0
+        order: 3
+        limits: { products: 10, agents: 25, demosPerMonth: 2000, members: 50 }
+      enterprise:
+        name: Enterprise
+        monthly: null
+        yearly: null
+        trial-days: 0
+        order: 4
+        limits: { products: null, agents: null, demosPerMonth: null, members: null }

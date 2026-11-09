@@ -1,0 +1,19 @@
+# Runvance Interview prices: the one place they will be set.
+# Read only by this product (its own Consul token) and platform admins: never by the website or
+# any anonymous visitor. Prices are given on request. Change a price here, sync, restart the service:
+# it writes these plans into its own database at start-up (adding new plans, never deleting any),
+# and its superadmins can no longer edit prices in the app.
+#
+# Schema (scripts/validate.py checks it): currency (ISO 4217), tax-percent, per (what one price
+# is for, each month: organization | employee), plans.<CODE>: name, description, monthly and
+# yearly (major units, e.g. rupees; null = quoted on request), trial-days, order, recommended,
+# limits (the product's own keys; null = unlimited), features (shown to signed-in customers).
+# No plan or price exists for Runvance Interview yet (2026-11-09): every deal is quoted. Add plans here first;
+# nothing else may define them.
+pv:
+  pricing:
+    product: interview
+    currency: INR
+    tax-percent: 18
+    per: organization
+    plans: {}

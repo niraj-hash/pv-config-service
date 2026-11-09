@@ -1,0 +1,636 @@
+# ai-service: the one service through which every Runvance product reaches AI models
+# (runvance-ai-service). Non-secret only: provider keys, the database and Redis passwords and the
+# BYOK encryption key come from the environment (Kubernetes secrets). Providers name the
+# environment variable that holds their key (`key-env`), never the key.
+#
+# ai-service reloads this key while running (Consul blocking query); a document that does not
+# validate is refused and the running configuration stays. Product usage is in
+# runvance-ai-service/docs/ai-usage-survey.md; how products call it in docs/integration.md.
+#
+# Prices are USD estimates for usage reports (the providers' invoices are authoritative):
+# per million tokens (input/output/cached input), per audio minute, per million characters.
+ai:
+  auth:
+    issuer: https://accounts.runvance.com
+    # Through Consul, like the gateway's lb://pv-auth-service.
+    jwks-url: lb://pv-auth-service/oauth2/jwks
+    required-scope: ai.invoke
+    admin-scope: ai.admin
+    allowed-products: [leados, payroll, demoagent, hms, interview, runvance]
+  consul:
+    only-passing: true
+
+  safety:
+    max-request-bytes: 26214400     # 25 MB: JSON bodies (images in chat)
+    # One recording, uploaded (spooled to disk, never held in memory) or fetched from a source_url:
+    # 2 GB, Deepgram's own limit. Each provider takes what its `max-audio-bytes` says (default
+    # provider-audio-bytes); OpenAI's 25 MB is cut into pieces with ffmpeg, or the next candidate is tried.
+    max-audio-bytes: 2147483648
+    provider-audio-bytes: 26214400
+    # source_url hosts (https only, no redirects): products' Azure Blob storage.
+    source-url-hosts: [.blob.core.windows.net]
+    max-messages: 200
+    max-input-chars: 400000
+    max-output-tokens: 16000        # cap over whatever a request or profile asks for
+    max-images: 10
+    max-image-bytes: 8388608
+    image-max-side: 4096            # HEIC/HEIF photos become JPEG, scaled to this long side
+    heic-max-pixels: 64000000       # decoded size refused above this (no decompression bombs)
+    max-embedding-inputs: 256
+    max-speech-chars: 4096
+    max-stream-seconds: 14400       # one live transcription stream
+    max-metadata-bytes: 2048
+
+  defaults:
+    timeout-ms: 60000               # one attempt
+    deadline-ms: 180000             # the whole call, retries and fallbacks included
+    max-attempts: 2                 # per candidate (429, 5xx and timeouts are retried)
+    backoff-ms: 250
+    max-backoff-ms: 4000
+  circuit-breaker:
+    window: 20
+    min-calls: 5
+    failure-ratio: 0.5
+    consecutive-failures: 5
+    open-seconds: 30
+
+  providers:
+    # OpenAI takes audio files up to 25 MB: longer recordings are cut with ffmpeg and joined.
+    openai: { type: openai, key-env: OPENAI_API_KEY, max-audio-bytes: 26214400, split-oversized-audio: true }
+    # Runvance Interview's Azure resource (centralindia). Enabled per environment by setting the
+    # endpoint and deployments in config/ai-service,<profile>; Entra ID (workload identity) in the cloud.
+    azure-openai:
+      type: azure-openai
+      enabled: false
+      endpoint: ""
+      api-version: "2024-10-21"
+      auth: entra
+      deployments: { gpt-5: interview-gpt5, gpt-5-mini: interview-gpt5-mini }
+    anthropic: { type: anthropic, key-env: ANTHROPIC_API_KEY }
+    google: { type: gemini, key-env: GEMINI_API_KEY }
+    # Deepgram takes files up to 2 GB, and fetches a source_url itself.
+    deepgram: { type: deepgram, key-env: DEEPGRAM_API_KEY, max-audio-bytes: 2147483648 }
+    # Short-audio REST (up to 60 seconds of audio): Connect's utterances.
+    azure-speech: { type: azure-speech, key-env: AZURE_SPEECH_KEY, region: centralindia, max-audio-bytes: 10485760 }
+    # Runvance CRM's self-hosted faster-whisper (PayVizio-LeadOS infra/transcription, OpenAI shape):
+    # Ad Studio captions, on by default. Its address is the CRM's internal container app; with no
+    # key or no route to it, crm.ad-captions falls back to OpenAI whisper-1. Takes what CRM's upload
+    # takes (512 MB).
+    crm-whisper:
+      type: openai
+      enabled: true
+      base-url: http://leados-transcription/v1
+      key-env: WHISPER_API_KEY
+      max-audio-bytes: 536870912
+    # Deterministic, no network: only built when AI_FAKE_PROVIDER_ENABLED (local and test).
+    fake: { type: fake, max-audio-bytes: 2147483648 }
+
+  models:
+    # ---------------------------------------------------------------- OpenAI
+    - id: openai:gpt-4o
+      description: "GPT-4o: fast general model with vision"
+      capabilities: [chat]
+      vision: true
+      context-window: 128000
+      max-output: 16384
+      pricing: { input-per-mtok: 2.50, output-per-mtok: 10.00, cached-input-per-mtok: 1.25 }
+    - id: openai:gpt-4o-mini
+      description: "GPT-4o mini: low-cost, fast, vision"
+      capabilities: [chat]
+      vision: true
+      context-window: 128000
+      max-output: 16384
+      pricing: { input-per-mtok: 0.15, output-per-mtok: 0.60, cached-input-per-mtok: 0.075 }
+    - id: openai:gpt-5
+      description: "GPT-5: OpenAI's reasoning model for complex work"
+      aliases: [gpt-5]
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      context-window: 400000
+      max-output: 128000
+      pricing: { input-per-mtok: 1.25, output-per-mtok: 10.00, cached-input-per-mtok: 0.125 }
+    - id: openai:gpt-5-mini
+      description: "GPT-5 mini: reasoning at a lower cost"
+      aliases: [gpt-5-mini]
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      context-window: 400000
+      max-output: 128000
+      pricing: { input-per-mtok: 0.25, output-per-mtok: 2.00, cached-input-per-mtok: 0.025 }
+    - id: openai:text-embedding-3-small
+      description: Text embeddings, 1536 dimensions
+      capabilities: [embeddings]
+      dimensions: 1536
+      embedding-space: openai-text-embedding-3-small
+      pricing: { input-per-mtok: 0.02, output-per-mtok: 0 }
+    - id: openai:text-embedding-3-large
+      description: Text embeddings, 3072 dimensions
+      capabilities: [embeddings]
+      dimensions: 3072
+      embedding-space: openai-text-embedding-3-large
+      pricing: { input-per-mtok: 0.13, output-per-mtok: 0 }
+    - id: openai:whisper-1
+      description: "Whisper: transcription with segment and word timings"
+      capabilities: [transcription]
+      word-timestamps: true
+      pricing: { per-audio-minute: 0.006 }
+    - id: openai:gpt-4o-transcribe
+      description: "GPT-4o transcription: accurate, text only"
+      capabilities: [transcription]
+      pricing: { per-audio-minute: 0.006 }
+    - id: openai:gpt-4o-mini-transcribe
+      description: "GPT-4o mini transcription: low-cost, text only"
+      capabilities: [transcription]
+      pricing: { per-audio-minute: 0.003 }
+    - id: openai:gpt-4o-mini-tts
+      description: Speech with steerable delivery (instructions)
+      capabilities: [speech]
+      pricing: { per-mchars: 12.0 }   # estimate: billed in audio tokens
+    - id: openai:tts-1
+      description: Speech, low latency
+      capabilities: [speech]
+      pricing: { per-mchars: 15.0 }
+    # ---------------------------------------------------------------- Azure OpenAI
+    - id: azure-openai:gpt-5
+      description: GPT-5 on Runvance Interview's Azure OpenAI resource
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      max-output: 128000
+      pricing: { input-per-mtok: 1.25, output-per-mtok: 10.00, cached-input-per-mtok: 0.125 }
+    - id: azure-openai:gpt-5-mini
+      description: GPT-5 mini on Runvance Interview's Azure OpenAI resource
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      max-output: 128000
+      pricing: { input-per-mtok: 0.25, output-per-mtok: 2.00, cached-input-per-mtok: 0.025 }
+    # ---------------------------------------------------------------- Anthropic
+    # The current SDK and API version take no temperature/top_p (sampling: false). Opus 5.5 and
+    # Sonnet 5.5 refuse a forced tool choice; Opus 5/5.5 and Sonnet 5.5 use Anthropic's server-side
+    # refusal fallback (as Runvance Connect does today).
+    - id: anthropic:claude-opus-5-5
+      description: "Claude Opus 5.5: Anthropic's most capable model"
+      aliases: [claude-opus]
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      forced-tool-choice: false
+      server-fallback: true
+      context-window: 1000000
+      max-output: 128000
+      pricing: { input-per-mtok: 4.00, output-per-mtok: 20.00, cached-input-per-mtok: 0.40 }
+    - id: anthropic:claude-opus-5
+      description: "Claude Opus 5: deep reasoning and long documents"
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      server-fallback: true
+      context-window: 1000000
+      max-output: 128000
+      pricing: { input-per-mtok: 5.00, output-per-mtok: 25.00, cached-input-per-mtok: 0.50 }
+    - id: anthropic:claude-sonnet-5-5
+      description: "Claude Sonnet 5.5: strong and fast for everyday work"
+      aliases: [claude-sonnet]
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      forced-tool-choice: false
+      server-fallback: true
+      context-window: 1000000
+      max-output: 128000
+      pricing: { input-per-mtok: 2.00, output-per-mtok: 10.00, cached-input-per-mtok: 0.20 }
+    - id: anthropic:claude-sonnet-4-5
+      description: "Claude Sonnet 4.5 (deprecated: retires 2026-11-30)"
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      context-window: 200000
+      max-output: 64000
+      status: deprecated
+      retires: 2026-11-30             # Runvance Health's model today: its profiles use Sonnet 5.5
+      pricing: { input-per-mtok: 3.00, output-per-mtok: 15.00, cached-input-per-mtok: 0.30 }
+    - id: anthropic:claude-haiku-4-5
+      description: "Claude Haiku 4.5: fast, low-cost"
+      aliases: [claude-haiku]
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      context-window: 200000
+      max-output: 64000
+      pricing: { input-per-mtok: 1.00, output-per-mtok: 5.00, cached-input-per-mtok: 0.10 }
+    - id: anthropic:claude-haiku-5-5
+      description: "Claude Haiku 5.5: fastest Claude, reasoning"
+      capabilities: [chat]
+      vision: true
+      sampling: false
+      reasoning: true
+      context-window: 1000000
+      max-output: 128000
+      pricing: { input-per-mtok: 0.10, output-per-mtok: 0.50, cached-input-per-mtok: 0.01 }
+    # ---------------------------------------------------------------- Google Gemini
+    - id: google:gemini-3.1-flash-lite
+      description: "Gemini 3.1 Flash-Lite: lowest cost and latency, thinking levels and budgets"
+      aliases: [gemini-flash-lite]
+      capabilities: [chat]
+      vision: true
+      reasoning: true
+      thinking-budget: true
+      max-output: 65536
+      pricing: { input-per-mtok: 0.10, output-per-mtok: 0.40 }   # Runvance CRM's configured estimate
+    - id: google:gemini-2.5-flash
+      description: "Gemini 2.5 Flash: fast with a thinking budget (or dynamic thinking)"
+      capabilities: [chat]
+      vision: true
+      thinking-budget: true
+      max-output: 65536
+      pricing: { input-per-mtok: 0.30, output-per-mtok: 2.50 }
+    - id: google:gemini-2.5-pro
+      description: "Gemini 2.5 Pro: Google's most capable, with a thinking budget"
+      capabilities: [chat]
+      vision: true
+      thinking-budget: true
+      max-output: 65536
+      pricing: { input-per-mtok: 1.25, output-per-mtok: 10.00 }
+    - id: google:gemini-embedding-001
+      description: Gemini embeddings, up to 3072 dimensions
+      capabilities: [embeddings]
+      dimensions: 3072
+      embedding-space: google-gemini-embedding-001
+      pricing: { input-per-mtok: 0.15, output-per-mtok: 0 }
+    # ---------------------------------------------------------------- speech
+    - id: deepgram:nova-3
+      description: "Deepgram Nova-3: speakers, word timings, live streams, files up to 2 GB"
+      capabilities: [transcription, transcription_stream]
+      word-timestamps: true
+      diarization: true
+      pricing: { per-audio-minute: 0.0077 }
+    - id: azure-speech:short-audio
+      description: Azure Speech short audio (up to 60 seconds)
+      capabilities: [transcription]
+      pricing: { per-audio-minute: 0.0167 }
+    - id: azure-speech:neural
+      description: "Azure neural voices (SSML: rate and pitch)"
+      capabilities: [speech]
+      pricing: { per-mchars: 16.0 }
+    - id: azure-speech:browser
+      description: Azure Speech token for the browser SDK
+      capabilities: [speech_token]
+    - id: crm-whisper:whisper-small
+      description: Runvance CRM's self-hosted faster-whisper (word timings)
+      capabilities: [transcription]
+      word-timestamps: true
+      pricing: { per-audio-minute: 0 }   # self-hosted
+    # ---------------------------------------------------------------- local and tests
+    - id: fake:fake-1
+      description: Deterministic placeholder model (local and tests only)
+      capabilities: [chat, embeddings, transcription, transcription_stream, speech, speech_token]
+      vision: true
+      word-timestamps: true
+      diarization: true
+      dimensions: 8
+      pricing: { input-per-mtok: 0, output-per-mtok: 0, per-audio-minute: 0, per-mchars: 0 }
+
+  # Logical voices. The first ten are Runvance CRM's stock Ad Studio voices (PayVizio-LeadOS
+  # ad-studio V2__ad_studio_seed.sql, provider GENERIC, provider_voice_id = these names). The vendor
+  # voices are picked by gender, tone and language (Azure's en-IN and hi-IN neural voices; OpenAI's
+  # voices speak any language): audition them before changing, since a change alters every ad.
+  voices:
+    male-professional: { description: "Arjun, professional (en)", providers: { openai: onyx, azure-speech: en-IN-PrabhatNeural } }
+    female-professional: { description: "Meera, professional (en)", providers: { openai: coral, azure-speech: en-IN-NeerjaNeural } }
+    male-energetic: { description: "Kabir, energetic (en)", providers: { openai: echo, azure-speech: en-IN-KunalNeural } }
+    female-energetic: { description: "Anaya, energetic (en)", providers: { openai: nova, azure-speech: en-IN-AnanyaNeural } }
+    male-friendly: { description: "Rohan, friendly (en)", providers: { openai: ash, azure-speech: en-IN-AaravNeural } }
+    female-friendly: { description: "Sara, friendly (en)", providers: { openai: shimmer, azure-speech: en-IN-KavyaNeural } }
+    male-authoritative: { description: "Vikram, authoritative (en)", providers: { openai: fable, azure-speech: en-IN-RehaanNeural } }
+    neutral-conversational: { description: "Neutral, conversational (en)", providers: { openai: alloy, azure-speech: en-IN-AashiNeural } }
+    male-hindi: { description: "Aarav, Hindi", providers: { openai: echo, azure-speech: hi-IN-MadhurNeural } }
+    female-hindi: { description: "Diya, Hindi", providers: { openai: sage, azure-speech: hi-IN-SwaraNeural } }
+    connect-presenter: { providers: { azure-speech: "en-IN-Neerja:DragonHDLatestNeural", openai: coral } }
+    interviewer: { providers: { openai: alloy, azure-speech: en-IN-NeerjaNeural } }
+
+  # Task profiles: products name these instead of models. `products` lists the pv-auth-service
+  # catalog keys that may use a profile. Candidates are tried in order (fallback chain).
+  profiles:
+    # ------------------------------------------------------------ Runvance CRM (leados)
+    crm.lead-scoring:
+      description: Lead score (JSON schema from the project's scoring config); tenant's own Gemini key first
+      products: [leados]
+      candidates: [google:gemini-3.1-flash-lite]   # no fallback: another provider would bill the platform
+      # A project's own model is pinned with `model` next to this profile (no fallback to this one).
+      pinned-model-fallback: false
+      key-mode: tenant-first
+      params: { temperature: 0.1, max-output-tokens: 2048 }
+      timeout-ms: 8000
+      deadline-ms: 20000
+      max-attempts: 3
+      limits: { subject-daily-calls: 5 }           # metadata.subject_id = the lead
+    crm.lead-insight:
+      description: Lead summary, next action, follow-up plan, brief, draft, performance, demo feedback
+      products: [leados]
+      candidates: [google:gemini-3.1-flash-lite, openai:gpt-5-mini]
+      key-mode: tenant-first
+      params: { temperature: 0.2, max-output-tokens: 900, reasoning: { budget-tokens: 0, effort: minimal } }
+      timeout-ms: 15000
+      deadline-ms: 30000
+    crm.lead-summary:
+      description: The lead summary with its prompt held here (example of a prompt moved out of a product)
+      products: [leados]
+      candidates: [google:gemini-3.1-flash-lite, openai:gpt-5-mini]
+      key-mode: tenant-first
+      prompt: crm.lead-summary
+      params: { temperature: 0.2, max-output-tokens: 900, reasoning: { budget-tokens: 0, effort: minimal } }
+      timeout-ms: 15000
+    crm.ad-copy:
+      description: Ad Studio copy variants (JSON schema per request)
+      products: [leados]
+      candidates: [google:gemini-3.1-flash-lite, openai:gpt-5-mini]
+      key-mode: tenant-first
+      params: { temperature: 0.85, max-output-tokens: 4096, reasoning: { budget-tokens: 0, effort: minimal } }
+      timeout-ms: 30000
+    crm.ad-captions:
+      description: Ad Studio captions (segment and word timings); uploads or a source_url up to 512 MB
+      products: [leados]
+      capability: transcription
+      candidates: [crm-whisper:whisper-small, openai:whisper-1]   # whisper-1 cuts long media into pieces
+      max-audio-bytes: 536870912
+      timeout-ms: 1200000
+      deadline-ms: 1500000
+      max-attempts: 1
+    crm.ad-voiceover:
+      description: Ad Studio narration
+      products: [leados]
+      capability: speech
+      candidates: [openai:gpt-4o-mini-tts, azure-speech:neural]
+      params: { voice: female-professional }
+      timeout-ms: 120000
+
+    # ------------------------------------------------------------ Runvance Payroll (payroll), was TIE
+    payroll.assistant:
+      description: Employee HR assistant and workforce agent conversations (multi-turn)
+      products: [payroll]
+      candidates: [anthropic:claude-opus-5-5, openai:gpt-5]
+      params: { max-output-tokens: 4096, reasoning: { effort: low } }
+    payroll.narration:
+      description: Payslip explanations, HR copilot, workforce agent narration, candidate screening notes
+      products: [payroll]
+      candidates: [anthropic:claude-opus-5-5, openai:gpt-5]
+      params: { max-output-tokens: 4096, reasoning: { effort: medium } }
+    payroll.document-parse:
+      description: Resume and receipt extraction (JSON; receipts as images)
+      products: [payroll]
+      candidates: [anthropic:claude-opus-5-5, openai:gpt-5]
+      params: { max-output-tokens: 4096, reasoning: { effort: low } }
+
+    # ------------------------------------------------------------ Runvance Connect (demoagent)
+    connect.live-turn:
+      description: Live demo turns (intent routing, tool choice, answers, narration, Hindi/Hinglish lines)
+      products: [demoagent]
+      candidates: [openai:gpt-4o, anthropic:claude-opus-5]
+      params: { max-output-tokens: 700, reasoning: { effort: low } }
+      timeout-ms: 10000
+      deadline-ms: 15000
+    connect.content:
+      description: Demo prep, site manifests, agent drafts, assessment plans, eval judging
+      products: [demoagent]
+      candidates: [openai:gpt-4o, anthropic:claude-opus-5-5]
+      params: { max-output-tokens: 4096, reasoning: { effort: low } }
+    connect.knowledge-embed:
+      description: Knowledge chunks and queries (pgvector, 1536 dimensions)
+      products: [demoagent]
+      capability: embeddings
+      candidates: [openai:text-embedding-3-small]
+      params: { dimensions: 1536 }
+    connect.speech:
+      description: The agent's voice (server-side synthesis)
+      products: [demoagent]
+      capability: speech
+      candidates: [azure-speech:neural, openai:gpt-4o-mini-tts]
+      params: { voice: connect-presenter, language: en-IN }
+      timeout-ms: 20000
+    connect.live-transcription:
+      description: A prospect's microphone in the demo room, relayed by Connect's backend (16 kHz PCM, interim and final results)
+      products: [demoagent]
+      capability: transcription_stream
+      candidates: [deepgram:nova-3]
+    connect.speech-to-text:
+      description: A participant's short utterance
+      products: [demoagent]
+      capability: transcription
+      candidates: [azure-speech:short-audio, openai:gpt-4o-mini-transcribe]
+      params: { language: en-IN }
+      timeout-ms: 30000
+    connect.browser-speech:
+      description: Azure Speech token for the browser SDK (live recognition and the agent's voice)
+      products: [demoagent]
+      capability: speech_token
+      candidates: [azure-speech:browser]
+      params: { voice: connect-presenter, language: en-IN }
+
+    # ------------------------------------------------------------ Runvance Health (hms)
+    # Patient data: no fallback to another company until the owner approves it as a processor.
+    health.clinical-assist:
+      description: Treatment AI assist (notes, diagnoses, prescriptions, tests, instructions) and safety review
+      products: [hms]
+      candidates: [anthropic:claude-sonnet-5-5, anthropic:claude-opus-5-5]
+      params: { max-output-tokens: 1500, reasoning: { effort: low } }
+      timeout-ms: 60000
+    health.daily-brief:
+      description: A physician's daily appointment briefing (prompt held here)
+      products: [hms]
+      candidates: [anthropic:claude-sonnet-5-5, anthropic:claude-opus-5-5]
+      prompt: health.daily-brief
+      params: { max-output-tokens: 1500, reasoning: { effort: low } }
+
+    # ------------------------------------------------------------ Runvance Interview (interview)
+    # Its task classes, with its default routes (backend application.yml app.ai.default-routes).
+    interview.classify:
+      description: CLASSIFY
+      products: [interview]
+      candidates: [anthropic:claude-haiku-4-5, openai:gpt-5-mini]
+      params: { cache-system-prompt: true, reasoning: { effort: low } }
+      timeout-ms: 5000
+      deadline-ms: 10000
+    interview.realtime:
+      description: GENERATE_REALTIME (live copilot, AI interviewer follow-ups); callers pass timeout_ms
+      products: [interview]
+      candidates: [anthropic:claude-haiku-4-5, openai:gpt-5-mini]
+      params: { cache-system-prompt: true, reasoning: { effort: low } }
+      timeout-ms: 5000
+      deadline-ms: 8000
+      max-attempts: 1
+    interview.extract:
+      description: EXTRACT (resume parsing, evidence extraction)
+      products: [interview]
+      candidates: [anthropic:claude-opus-5, openai:gpt-5]
+      params: { cache-system-prompt: true, reasoning: { effort: medium } }
+      timeout-ms: 120000
+    interview.scoring:
+      description: ASSESS_REASONING (rubric evaluation, gaps and risks, requirement match)
+      products: [interview]
+      candidates: [anthropic:claude-opus-5, openai:gpt-5]
+      params: { cache-system-prompt: true, reasoning: { effort: high } }
+      timeout-ms: 180000
+      deadline-ms: 400000
+    interview.summarize:
+      description: SUMMARIZE_BATCH (JD and framework drafts, kits, summaries, debrief briefs)
+      products: [interview]
+      candidates: [anthropic:claude-opus-5, openai:gpt-5]
+      params: { cache-system-prompt: true, reasoning: { effort: medium } }
+      timeout-ms: 180000
+      deadline-ms: 400000
+    interview.live-transcription:
+      description: One participant track, live (16-bit PCM, interim and final results)
+      products: [interview]
+      capability: transcription_stream
+      candidates: [deepgram:nova-3]
+    interview.recording-transcription:
+      description: Re-transcription of a consented recording, with speakers (upload or source_url, up to 2 GB)
+      products: [interview]
+      capability: transcription
+      candidates: [deepgram:nova-3]
+      timeout-ms: 900000
+      deadline-ms: 1200000
+    interview.answer-transcription:
+      description: The voice AI interviewer's recorded answers (one speaker, text only)
+      products: [interview]
+      capability: transcription
+      candidates: [openai:gpt-4o-transcribe, deepgram:nova-3]
+      timeout-ms: 60000
+    interview.interviewer-voice:
+      description: The AI interviewer's voice
+      products: [interview]
+      capability: speech
+      candidates: [openai:gpt-4o-mini-tts]
+      params:
+        voice: interviewer
+        instructions: Read the text exactly as written, clearly, at an even and moderate pace, in a neutral and calm tone.
+      timeout-ms: 20000
+
+    # ------------------------------------------------------------ Runvance Accelerator (runvance)
+    accelerator.erp-query:
+      description: Natural-language questions over ERP (Odoo) data
+      products: [runvance]
+      candidates: [openai:gpt-4o-mini, anthropic:claude-haiku-4-5]
+      prompt: accelerator.erp-query
+      params: { temperature: 0.2, max-output-tokens: 1200 }
+      timeout-ms: 20000
+
+  prompts:
+    crm.lead-summary:
+      active: 1
+      versions:
+        1:
+          notes: From PayVizio-LeadOS LeadIntelligenceService.summarise (2026-11-09)
+          system: >-
+            You summarise CRM leads for salespeople. Be specific and brief. Never invent facts,
+            budgets, timelines or names that are not in the data you were given. If the data is
+            thin, say so plainly instead of padding.
+          user: |
+            Summarise this lead for a salesperson who is about to call them.
+
+            Lead:
+            {{lead}}
+
+            Recent history (newest first):
+            {{timeline}}
+
+            Write two or three sentences for "summary" covering who they are and what they want.
+            Put where things stand in "situation". List concrete buying signals in "signals" and
+            anything worrying in "concerns". Use only what is in the data above -- if something is
+            not there, leave the list empty rather than guessing.
+          variables:
+            lead: { untrusted: true }
+            timeline: { untrusted: true }
+          response-format:
+            type: json_schema
+            name: lead_summary
+            schema:
+              type: object
+              properties:
+                summary: { type: string }
+                situation: { type: string }
+                signals: { type: array, items: { type: string } }
+                concerns: { type: array, items: { type: string } }
+              required: [summary, situation]
+    health.daily-brief:
+      active: 1
+      versions:
+        1:
+          notes: From hms DoctorAssistService.applyLlmBrief (2026-11-09)
+          system: >-
+            You are a clinical assistant preparing a physician's daily briefing from their
+            appointment panel. Be concise, factual, and India-context. Do not invent patient data
+            beyond what is provided. Output is a decision aid; the physician makes final calls.
+          user: |
+            Today's appointment panel:
+            {{panel}}
+          variables:
+            panel: { untrusted: true, description: "one line per appointment: id, age, visit, diagnosis, medications, allergies" }
+          response-format:
+            type: json_schema
+            name: daily_brief
+            schema:
+              type: object
+              properties:
+                summary: { type: string, description: 2-3 sentence overview of the day }
+                highlights: { type: array, items: { type: string } }
+                prep_notes:
+                  type: array
+                  items:
+                    type: object
+                    properties: { patient_id: { type: string }, prep_note: { type: string } }
+                    required: [patient_id, prep_note]
+              required: [summary, highlights, prep_notes]
+    accelerator.erp-query:
+      active: 1
+      versions:
+        1:
+          notes: New (Accelerator's AiQueryService answers from keyword templates today)
+          system: >-
+            You answer business questions over records from the company's ERP. Use only the records
+            given. Classify the question, summarise what the records show in one or two sentences,
+            and suggest at most three concrete next actions. If the records cannot answer it, say so.
+          user: |
+            Question: {{question}}
+
+            Records ({{record_type}}):
+            {{records}}
+          variables:
+            question: { untrusted: true }
+            record_type: { required: false }
+            records: { untrusted: true, required: false }
+          response-format:
+            type: json_schema
+            name: erp_answer
+            schema:
+              type: object
+              properties:
+                intent:
+                  type: string
+                  enum: [inactive_customers, reorder_products, overdue_followups, top_customers, general]
+                summary: { type: string }
+                actions: { type: array, items: { type: string }, maxItems: 3 }
+              required: [intent, summary, actions]
+
+  # Rate limits and monthly budgets (USD, estimated). Placeholders until the owner sets them;
+  # `default` applies to products / tenants without their own entry. Budgets count platform-key
+  # spend only (a tenant's own key bills the tenant).
+  limits:
+    fail-open: true
+    budget-scope: platform-keys
+    products:
+      default: { requests-per-minute: 3000, tokens-per-minute: 4000000 }
+      interview: { requests-per-minute: 6000, tokens-per-minute: 8000000 }
+    tenant-defaults:
+      default: { requests-per-minute: 300, tokens-per-minute: 600000, monthly-budget-usd: 100 }
+    tenant-overrides: {}

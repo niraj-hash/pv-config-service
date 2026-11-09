@@ -1,0 +1,13 @@
+# notification-service in staging: what Argo CD deploys when someone presses Sync on notification-service-staging.
+# Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
+# History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
+#
+#   notification-service  acrinterviewaistaging.azurecr.io/notification-service:(none)
+#   notification-web      acrinterviewaistaging.azurecr.io/notification-web:(none)
+releaseOf: notification-service
+# Not released yet: no Application until a release names the chart's commit.
+chartRevision: "unreleased"
+# Chart values (this file is the chart's last value file): the image tags.
+common:
+  image:
+    tag: ""

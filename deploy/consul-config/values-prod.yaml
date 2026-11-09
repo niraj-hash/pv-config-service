@@ -1,0 +1,4 @@
+# Production: its own AKS cluster (not provisioned yet).
+environment: prod
+image:
+  registry: acrrunvanceprod.azurecr.io   # TODO(owner): the production ACR (deploy/services.yaml)

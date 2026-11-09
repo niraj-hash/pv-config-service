@@ -1,0 +1,56 @@
+# Runvance Connect (repo ai-demo-agent, formerly AI Demo Agent): its console and the Assessment console. pg-api-gateway checks these
+# permissions per route (config/pg-api-gateway/conf.d/demoagent.yml); the product has no role checks of its own.
+# The four permissions are nested levels, taken over 1:1 from the product's former @PreAuthorize rules
+# (Access.READ, OPERATE/INVITE/CAN_SEND, Access.CONFIGURE, Access.MANAGE_ORG). The product's own API keys carry
+# one of these roles too (ADMIN, PRODUCT_MANAGER, SALES_REP, VIEWER) and get the same permissions.
+auth:
+  catalog:
+    demoagent:
+      name: Runvance Connect
+      # Gateway sign-in callbacks: both consoles (one web app), production and local.
+      origins:
+        - https://connect.runvance.com
+        - https://assessment.runvance.com
+        - http://demoagent.localhost:8080
+        - http://assessment.demoagent.localhost:8080
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: An AI agent that demos your product to every visitor
+        category: Sales & Marketing
+        color: "#7c3aed"
+        order: 20
+      # Who invites people and sets their roles (pv-auth-service's team pages, /bff/organization), as before (MANAGE_ORG): owners and admins manage the team.
+      manage-members-permission: org.manage
+      self-signup: true          # sign-up creates an organization; the product creates its own on first use
+      signup-role: owner
+      permissions:
+        workspace.read: See products, demos, sessions, leads, analytics and reports
+        demo.operate: Run demos - book, launch and steer sessions, invite prospects, message leads
+        product.configure: Configure products, agents, knowledge, tools, booking links, demo preps and assessments
+        org.manage: Administer the organization - company settings, API keys, integrations, webhooks, audit log
+      roles:
+        owner:
+          name: Owner
+          description: Everything, including the organization's administration
+          permissions: ["*"]
+        admin:
+          name: Admin
+          description: Everything, including the organization's administration
+          permissions: ["*"]
+        product_manager:
+          name: Product manager
+          description: Configures products and agents, and runs demos
+          permissions: [workspace.read, demo.operate, product.configure]
+        sales_rep:
+          name: Sales rep
+          description: Runs demos and works leads
+          permissions: [workspace.read, demo.operate]
+        viewer:
+          name: Viewer
+          description: Sees everything, changes nothing
+          permissions: [workspace.read]
+        platform_admin:
+          name: Platform admin
+          # Assign in the platform organization only: there it also lists every organization (GET /api/v1/organizations).
+          description: Runvance staff
+          permissions: ["*"]

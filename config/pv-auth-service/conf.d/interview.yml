@@ -1,0 +1,124 @@
+# Runvance Interview's permissions and roles (product key "interview"). The permission keys are the ones Runvance Interview used in
+# its own catalog (iam.permission), so the record-level rules kept in the service (relationship overrides
+# interview.read_all / job.manage_all, scorecard.read_all, analytics.interviewers, the search and report sections a
+# person sees, an API key's scopes) read the same words from X-PV-Permissions. Not carried over: platform.admin (the
+# service derives it from super_admin in the platform organization; it was never grantable by a tenant role),
+# sso.manage and scim.manage (customer SSO and SCIM are not supported until pv-auth-service has them) and role.manage
+# (roles live here now). One key is renamed: api_key.manage is api_access.manage, because this repository's validator
+# takes any key naming an "api_key" for a secret (the service accepts both words). Roles: Runvance Interview's seven system roles, lower-cased, with the permissions it gave them; the
+# platform SUPER_ADMIN is super_admin in the platform organization. The gateway's rules: pg-api-gateway/conf.d/interview.yml.
+auth:
+  catalog:
+    interview:
+      name: Runvance Interview
+      # Gateway sign-in callbacks: the web app, production and local.
+      origins: [https://interview.runvance.com, http://interview.localhost:8080]
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: AI-assisted interviews and hiring assessments
+        category: People
+        color: "#1d4ed8"
+        order: 40
+      # Who invites people and sets their roles (pv-auth-service's team page, /bff/team), as before: user.manage.
+      manage-members-permission: user.manage
+      # Organizations are provisioned by platform staff (data region, cell, plan), never self-service: Runvance Interview had
+      # no sign-up, only the platform console's "create organization". Platform admins create the organization here
+      # and invite its first org_admin; Runvance Interview creates its own tenant on that person's first request.
+      self-signup: false
+      signup-role: org_admin
+      permissions:
+        ai.config: Configure AI settings
+        ai_eval.read: "View the AI evaluation console: prompt versions, eval runs, cost, latency and activation history (read-only)"
+        analytics.interviewers: View coaching analytics for all interviewers (scorecard timeliness, calibration drift, kit coverage)
+        analytics.read: Read analytics
+        api_access.manage: "Create, list and revoke organization API keys (scopes never exceed the creator's permissions)"
+        application.move: Move applications between stages
+        application.read: Read applications
+        application.reopen: Reopen an application that was hired, rejected or withdrawn (a written note is required)
+        application.write: Create applications
+        assessment.approve: Approve assessments
+        assessment.export: Export assessments
+        assessment.read: Read assessments
+        assessment.run: Run or re-run AI assessments
+        audit.read: Read audit logs
+        billing.manage: Manage billing
+        calibration.manage: Create calibration sessions, choose interviews and raters, and view results
+        candidate.delete: Delete candidates
+        candidate.export: Export candidate data
+        candidate.read: Read candidates
+        candidate.write: Create and edit candidates
+        consent.read: Read consent records
+        decision.make: Record hiring decisions
+        fairness.report: View aggregate adverse-impact reports and export bias-audit data (never individual demographics)
+        integration.manage: Manage integrations
+        interview.cancel: Cancel interviews
+        interview.create: Create interviews
+        interview.join: Join interviews
+        interview.read: Read interviews
+        interview.read_all: "Read every interview's live stream, transcript, assessment and scorecards without a panel or job relationship (oversight)"
+        interview.record: Control interview recording
+        interview.schedule: Schedule interviews
+        job.manage_all: Act on every job as if assigned to it, including edits, collaborators and hiring decisions (talent-acquisition leads)
+        job.publish: Publish jobs
+        job.read: Read jobs
+        job.write: Create and edit jobs
+        offer.manage: Manage offers
+        organization.manage: Manage organization profile and settings
+        privacy.process: Process privacy requests
+        prompt.manage: Manage prompt versions
+        recording.download: Download recordings
+        recording.read: Play recordings
+        report.export: Export reports
+        report.read: Read reports
+        scorecard.read_all: Read all scorecards for an interview
+        scorecard.write: Write own scorecards
+        settings.manage: Manage organization settings
+        transcript.read: Read transcripts
+        user.manage: Invite, disable and manage members
+        webhook.manage: Manage webhooks
+      roles:
+        org_admin:
+          name: Organization Admin
+          description: Everything in the organization, including members, API keys, integrations and settings.
+          permissions: ["*"]
+        hr:
+          name: HR
+          description: Jobs, candidates, applications, scheduling, offers, privacy requests, reports and fairness reporting.
+          permissions: [analytics.interviewers, analytics.read, application.move, application.read, 
+                        application.reopen, application.write, assessment.export, assessment.read, 
+                        calibration.manage, candidate.delete, candidate.export, candidate.read, candidate.write, 
+                        consent.read, fairness.report, interview.cancel, interview.create, interview.read, 
+                        interview.schedule, job.publish, job.read, job.write, offer.manage, privacy.process, 
+                        report.export, report.read]
+        recruiter:
+          name: Recruiter
+          description: Jobs, candidates, applications and scheduling interviews.
+          permissions: [analytics.read, application.move, application.read, application.write, assessment.read, 
+                        candidate.export, candidate.read, candidate.write, interview.cancel, interview.create, 
+                        interview.read, interview.schedule, job.publish, job.read, job.write, report.read]
+        hiring_manager:
+          name: Hiring Manager
+          description: "Their jobs and candidates: joins interviews, writes scorecards, makes hiring decisions."
+          permissions: [application.move, application.read, assessment.read, candidate.read, decision.make, 
+                        interview.join, interview.read, job.read, job.write, recording.read, report.read, 
+                        scorecard.read_all, scorecard.write, transcript.read]
+        interviewer:
+          name: Interviewer
+          description: Joins the interviews they are on the panel of and writes their scorecards.
+          permissions: [candidate.read, interview.join, interview.read, scorecard.write, transcript.read]
+        technical_interviewer:
+          name: Technical Interviewer
+          description: An interviewer for technical rounds (coding pad).
+          permissions: [candidate.read, interview.join, interview.read, scorecard.write, transcript.read]
+        auditor:
+          name: Auditor
+          description: Reads audit logs, reports, analytics, assessments and consent records; changes nothing.
+          permissions: [ai_eval.read, analytics.read, assessment.read, audit.read, consent.read, fairness.report, 
+                        interview.read_all, report.read]
+        super_admin:
+          name: Platform super admin
+          # Runvance Interview staff: the platform console (organizations, oversight, regulated features, AI evaluation,
+          # platform audit). Assign in the platform organization only; it grants nothing in any other organization
+          # (the gateway's platform rules require orgs: [platform], and the service ignores it elsewhere). No tenant
+          # permissions: platform staff are not members of customers' organizations.
+          permissions: []

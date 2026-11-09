@@ -1,0 +1,105 @@
+# Shared by every service that reads pv-config-service (config/application/data).
+# Non-secret only: scripts/validate.py refuses anything that looks like a secret value.
+# Keep this small: these values override what each service packages in its own application.yml
+# (e.g. actuator exposure stays each service's own decision).
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  cloud:
+    consul:
+      discovery:
+        prefer-ip-address: true
+        health-check-interval: 10s
+        # An instance that stays unhealthy this long is removed from the catalog.
+        health-check-critical-timeout: 2m
+        # Calls through discovery (lb://) go only to instances whose health checks pass.
+        query-passing: true
+# Outbound resilience (docs/platform-contract.md, "Circuit breakers, retries, timeouts"). Every outbound
+# call (platform services and third parties) runs in a Resilience4j circuit breaker, time limiter and,
+# when the call is idempotent, retry named after its target: the instances below for the platform
+# services, any other name (meta-graph, sendgrid, ...) inherits "default". These resilience4j.* names
+# bind the same in Spring Boot 3 (resilience4j-spring-boot3, or spring-cloud-starter-circuitbreaker-
+# resilience4j 3.x) and Spring Boot 4 (resilience4j-spring-boot4 2.4+, or the 5.x starter). Exception
+# classes are only the JDK's and spring-web's, present in every service. Inert in a service without
+# Resilience4j. Health indicators stay off: an open breaker must not take a service out of rotation.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 50                  # the last 50 calls
+        minimum-number-of-calls: 20              # judged once 20 calls were made
+        failure-rate-threshold: 50               # percent failing → open
+        slow-call-rate-threshold: 80             # percent slower than the threshold → open
+        slow-call-duration-threshold: 10s
+        wait-duration-in-open-state: 30s         # calls fail at once meanwhile (CallNotPermittedException)
+        automatic-transition-from-open-to-half-open-enabled: true
+        permitted-number-of-calls-in-half-open-state: 5
+        # A refusal of one request (4xx: bad input, no permission, a quota's 429) is not the callee failing.
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException
+    instances:
+      ai-service:
+        base-config: default
+        slow-call-duration-threshold: 90s        # a completion may take a minute (ai-service's per-attempt timeout is 60 s)
+      notification-service:
+        base-config: default
+      pv-auth-service:
+        base-config: default
+        slow-call-duration-threshold: 2s         # token requests
+  retry:
+    configs:
+      default:
+        # Only around idempotent calls: GET, HEAD, a PUT or DELETE of a known resource, a token request, or a
+        # POST with an Idempotency-Key the callee honours. Never around a call that may already have taken effect.
+        max-attempts: 3                          # the call and two retries
+        wait-duration: 200ms
+        enable-exponential-backoff: true         # 200 ms, 400 ms, ... up to 2 s
+        exponential-backoff-multiplier: 2
+        exponential-max-wait-duration: 2s
+        enable-randomized-wait: true             # jitter: each wait ±50 %
+        randomized-wait-factor: 0.5
+        # The call didn't get through, or the callee asked to come back (honour its Retry-After: see pv.resilience).
+        retry-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException$BadGateway
+          - org.springframework.web.client.HttpServerErrorException$ServiceUnavailable
+          - org.springframework.web.client.HttpServerErrorException$GatewayTimeout
+          - org.springframework.web.client.HttpClientErrorException$TooManyRequests
+    instances:
+      ai-service:
+        base-config: default
+        max-attempts: 2                          # reads only (GET /v1/models): completions, speech, transcription and
+                                                 # embeddings cost tokens and ai-service retries its providers itself
+      notification-service:
+        base-config: default                     # sends with an Idempotency-Key (Notify returns the first result)
+      pv-auth-service:
+        base-config: default                     # client-credentials token requests
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 10s                    # the whole call; a blocking client sets its read timeout to match
+        cancel-running-future: true
+    instances:
+      ai-service:
+        base-config: default
+        timeout-duration: 130s                   # two 60 s attempts inside ai-service, and the way there
+      notification-service:
+        base-config: default
+        timeout-duration: 30s                    # a batch is sent synchronously
+      pv-auth-service:
+        base-config: default
+        timeout-duration: 5s
+pv:
+  resilience:
+    # A 429 or 503 with Retry-After: the next attempt waits that long instead of the backoff when it is
+    # at most this; longer, no retry (the caller reports "try later"). Resilience4j has no property for
+    # it: each caller's retry instance reads the header (RetryConfig interval function).
+    retry-after-max: 10s

@@ -1,0 +1,120 @@
+# What scripts/release.sh needs to build and release each Runvance service (docs/deploy-with-argocd.md).
+# Argo CD's side of each service (repository URL, chart path, namespace, value files) is in
+# deploy/argocd/applicationset-<env>.yaml; scripts/check-releases.py checks that the two agree.
+#
+#   repo        the service's repository: its directory beside this checkout (a worktree can stand in
+#               for it: release.sh --repo-dir)
+#   images      one per image the chart runs, built with `az acr build` from the repository's root:
+#     name        the ACR repository (docs/runtime.md, "Images")
+#     dockerfile  relative to the repository's root
+#     context     the build context, relative to the repository's root
+#     target      optional: the Dockerfile stage
+#     buildArgs   optional: public build arguments (never secrets: they end up in the image)
+#     prebuild    optional: a command run in the repository's root before the build
+#     values      the chart values the release file sets to this image's tag
+#
+# Images are tagged with the short git SHA of the commit they are built from; a release pins the chart
+# to the same commit (chartRevision), so a release file names one commit per service.
+
+# The ACR per environment (az acr build --registry, az acr import --name). The charts' values-<env>.yaml
+# name the same registries (image.registry).
+registries:
+  staging: acrinterviewaistaging
+  prod: acrrunvanceprod   # TODO(owner): the production ACR, not created yet (values-prod.yaml use the same name)
+
+services:
+  # --- platform ---
+  pg-api-gateway:
+    repo: pg-api-gateway
+    images:
+      - { name: pg-api-gateway, dockerfile: Dockerfile, context: ., values: [image.tag] }
+
+  pv-auth-service:
+    repo: pv-auth-service
+    images:
+      - { name: pv-auth-service, dockerfile: Dockerfile, context: ., values: [image.tag] }
+
+  notification-service:   # Runvance Notify: the API and its dashboard (web.enabled in the chart)
+    repo: notification-service
+    images:
+      - { name: notification-service, dockerfile: backend/Dockerfile, context: backend, values: [common.image.tag] }
+      - { name: notification-web, dockerfile: frontend/Dockerfile, context: frontend, values: [common.image.tag] }
+
+  ai-service:
+    repo: runvance-ai-service
+    images:
+      - { name: ai-service, dockerfile: Dockerfile, context: ., values: [image.tag] }
+
+  # The job that publishes config/ to Consul (deploy/consul-config). Its image is only the tools (bash,
+  # curl, Python with PyYAML); the configuration comes from the pinned commit of this repository.
+  consul-config:
+    repo: pv-config-service
+    images:
+      - { name: pv-config-sync, dockerfile: deploy/consul-config/image/Dockerfile, context: deploy/consul-config/image, values: [image.tag] }
+
+  # --- products ---
+  leados:   # Runvance CRM: leados-api (also the Ad Studio worker) and leados-web
+    repo: PayVizio-LeadOS
+    images:
+      - name: leados-api
+        dockerfile: backend/app/Dockerfile
+        context: backend/app
+        # The Dockerfile copies the jar; building it runs ApplicationContextTest against a real Postgres.
+        prebuild: mvn -pl backend/app -am clean package
+        values: [common.image.tag]
+      - { name: leados-web, dockerfile: frontend/Dockerfile, context: frontend, values: [common.image.tag] }
+
+  peoplevizio:   # Runvance Payroll
+    repo: hr-ai-solution
+    images:
+      - { name: hrms-api, dockerfile: backend/hrms-app/Dockerfile, context: backend, values: [common.image.tag] }
+      - { name: hrms-web, dockerfile: frontend/Dockerfile, context: frontend, values: [common.image.tag] }
+
+  hms:   # Runvance Health
+    repo: hms
+    images:
+      - { name: hms-api, dockerfile: backend/Dockerfile, context: backend, values: [common.image.tag] }
+      - { name: hms-web, dockerfile: frontend/Dockerfile, context: frontend, values: [common.image.tag] }
+
+  demoagent:   # Runvance Connect (ai-demo-agent deploy/README.md, "Images")
+    repo: ai-demo-agent
+    images:
+      - { name: demoagent-platform, dockerfile: services/Dockerfile, context: ., values: [common.image.tag] }
+      - { name: demoagent-worker, dockerfile: workers/browser-worker/Dockerfile, context: workers/browser-worker, values: [common.image.tag] }
+      - name: demoagent-web
+        dockerfile: apps/web/Dockerfile
+        context: apps/web
+        buildArgs:
+          NEXT_PUBLIC_API_URL: https://connect-api.runvance.com
+          NEXT_PUBLIC_ADMIN_URL: https://connect.runvance.com
+          NEXT_PUBLIC_SITE_URL: https://demo.runvance.com
+          NEXT_PUBLIC_SALES_SCHEDULING_TOKEN: eduvizio-standard
+        values: [common.image.tag]
+      - name: demoagent-admin
+        dockerfile: apps/admin/Dockerfile
+        context: apps/admin
+        buildArgs:
+          NEXT_PUBLIC_API_WS_URL: wss://connect-api.runvance.com
+          NEXT_PUBLIC_WEB_URL: https://demo.runvance.com
+          NEXT_PUBLIC_CONNECT_URL: https://connect.runvance.com
+          NEXT_PUBLIC_ASSESSMENT_URL: https://assessment.runvance.com
+          NEXT_PUBLIC_CONSOLE: connect
+        values: [common.image.tag]
+
+  meet:   # Runvance Meet (in the ai-demo-agent repository)
+    repo: ai-demo-agent
+    images:
+      - { name: meet-api, dockerfile: meet/api/Dockerfile, context: meet/api, values: [common.image.tag] }
+      - { name: meet-web, dockerfile: meet/web/Dockerfile, context: meet/web, values: [common.image.tag] }
+
+  interview:   # Runvance Interview: one backend image runs the api, worker and extractor
+    repo: interview-ai-management
+    images:
+      - { name: interviewai-api, dockerfile: backend/Dockerfile, context: ., target: runtime, values: [common.image.tag] }
+      - { name: interviewai-migrator, dockerfile: backend/Dockerfile, context: ., target: migrator, values: [common.image.tag] }
+      - { name: interviewai-web, dockerfile: frontend/Dockerfile, context: frontend, values: [common.image.tag] }
+
+  runvance-accelerator:
+    repo: runvance
+    images:
+      - { name: runvance-accelerator, dockerfile: accelerator/Dockerfile, context: accelerator, values: [image.tag] }

@@ -1,0 +1,42 @@
+# consul-config: publishes config/ to Consul KV (Chart.yaml). Same in every environment, apart from the
+# registry (values-<env>.yaml); the tag comes from the release file (deploy/releases/<env>/consul-config.yaml).
+#
+# files/config and files/scripts are symlinks to this repository's config/ and scripts/: Helm reads
+# them at the commit Argo CD renders (Argo CD admits symlinks that stay inside the repository).
+
+environment: ""
+
+# The tools image (image/Dockerfile: bash, curl, Python 3.12 with PyYAML), built by
+# scripts/release.sh consul-config <env> --build.
+image:
+  registry: ""
+  repository: pv-config-sync
+  tag: ""
+
+consul:
+  # scripts/sync.sh's CONSUL_HTTP_ADDR. Plain HTTP on 8500, as the services use it (docs/runtime.md,
+  # "Consul over TLS"); with TLS-only Consul: https://...:8501 and Consul's CA in CURL_CA_BUNDLE.
+  address: http://consul-server.consul.svc.cluster.local:8500
+  namespace: consul
+
+# The config-loader token (consul/policies/config-loader.hcl: write config/ only), created by
+# scripts/bootstrap-acl.sh --tokens and stored once per environment:
+#   az keyvault secret set --vault-name <vault> -n pv-config-service-config-loader-token --file secrets/config-loader.token
+secrets:
+  store: { name: azure-keyvault, kind: ClusterSecretStore }
+  refreshInterval: 1h
+  configLoaderToken: pv-config-service-config-loader-token
+
+# --prune: delete config/<context>/data keys whose directory is gone, so a rollback also removes what
+# the later commit added.
+prune: true
+
+job:
+  activeDeadlineSeconds: 600
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+dns:
+  namespace: kube-system
+  labels: { k8s-app: kube-dns }

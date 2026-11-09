@@ -1,0 +1,8 @@
+# Local runs (SPRING_PROFILES_ACTIVE=local): the local issuer address and http cookies. pv-auth-service
+# itself is still found through the local Consul (lb://pv-auth-service).
+pv:
+  gateway:
+    auth:
+      issuer: http://accounts.localhost:8080
+    session:
+      secure-cookie: false

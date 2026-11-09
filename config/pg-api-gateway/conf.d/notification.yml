@@ -1,0 +1,56 @@
+# Runvance Notify (notification-service). Two hosts, one backend (Consul: notification-service):
+#   notify.*      the dashboard: the gateway signs people in (BFF) and applies the role rules below.
+#   notify-api.*  tenants' servers: anonymous at the gateway; the service requires one of the
+#                 tenant's API keys (X-API-Key / Authorization: ApiKey) and accepts it on
+#                 /api/notifications/** only. A separate product key because routes are per product.
+# Roles (pv-auth-service conf.d/notification.yml): super_admin (platform org), tenant_admin, tenant_member.
+pv:
+  gateway:
+    products:
+      notification:
+        name: Runvance Notify
+        hosts: [notify.runvance.com, notify.localhost]
+        browser-sign-in: true
+        routes:
+          - id: notification-dashboard-api
+            upstream: lb://notification-service
+            paths: ["/api/**"]
+            access: PROTECTED
+            default-rule: DENY
+            response-timeout-ms: 120000 # batch sends are synchronous
+            rules:
+              # Recipients' unsubscribe links: the encrypted token is the credential (checked by the service).
+              - paths: ["/api/public/unsubscribe"]
+                methods: [GET, POST]
+                anonymous: true
+              # Provider delivery events are on notify-api only (conf.d/notification-api.yml).
+              # Platform administration (was hasRole SUPER_ADMIN on /api/admin/**).
+              - paths: ["/api/admin/**"]
+                roles: [super_admin]
+                orgs: [platform]
+              # Tenant settings: changes are tenant_admin only (were @PreAuthorize hasRole TENANT_ADMIN, 7 methods).
+              - paths: ["/api/tenant/api-keys", "/api/tenant/webhooks"]
+                methods: [POST]
+                roles: [tenant_admin]
+              - paths: ["/api/tenant/providers"]
+                methods: [PUT]
+                roles: [tenant_admin]
+              - paths: ["/api/tenant/webhooks/{id}"]
+                methods: [PUT]
+                roles: [tenant_admin]
+              - paths: ["/api/tenant/api-keys/{id}", "/api/tenant/providers/{id}", "/api/tenant/webhooks/{id}"]
+                methods: [DELETE]
+                roles: [tenant_admin]
+              - paths: ["/api/tenant/api-keys", "/api/tenant/providers", "/api/tenant/webhooks"]
+                methods: [GET]
+                roles: [tenant_admin, tenant_member]
+              # Everything else a tenant's people did (was: any signed-in user).
+              - paths: ["/api/notifications/**", "/api/tenant/templates/**", "/api/tenant/suppressions/**",
+                        "/api/tenant/consent/**", "/api/tenant/reports/**"]
+                roles: [tenant_admin, tenant_member]
+              # Who am I (any signed-in person of the product, super-admins included).
+              - paths: ["/api/me", "/api/me/tenant"]
+                methods: [GET]
+          - id: notification-web
+            access: PUBLIC
+            upstream: ${NOTIFICATION_WEB_URI:lb://notification-web}

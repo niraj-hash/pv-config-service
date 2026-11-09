@@ -1,0 +1,118 @@
+# Runvance CRM (LeadOS, PayVizio-LeadOS): leados-api's configuration in every environment. Its
+# application.yml keeps safe defaults for local runs and tests; what differs per environment is in
+# config/leados-api,<env>/ (SPRING_PROFILES_ACTIVE = the environment), and what the Ad Studio
+# render worker (the same image, a second workload) changes is in config/leados-api,adstudio-worker/.
+# Deployment facts (database host, the storage account's identity) are in the chart's
+# values-<env>.yaml (PayVizio-LeadOS deploy/helm/leados). Secrets only from the environment (Key
+# Vault -> Kubernetes secrets): DB_PASSWORD, FIELD_ENCRYPTION_KEY, AI_CLIENT_SECRET (LeadOS's
+# pv-auth-service service client, also used for Notify), AD_STUDIO_SIGNING_SECRET, META_*,
+# GOOGLE_OAUTH_CLIENT_SECRET, SENDGRID_API_KEY, WHATSAPP_*, PAYVIZIO_PAYMENTS_*.
+app:
+  web:
+    # Links in emails, the MCP consent page, the return from PayVizio checkout.
+    frontend-origin: https://crm.runvance.com
+  security:
+    # Refuse to start with the development FIELD_ENCRYPTION_KEY: false here. Written as a placeholder
+    # with its value only because the key's name reads like a secret to scripts/validate.py.
+    allow-default-secrets: ${ALLOW_DEFAULT_SECRETS:false}
+  ai:
+    service:
+      base-url: lb://ai-service
+      token-url: lb://pv-auth-service/oauth2/token
+      # LeadOS's SERVICE client in pv-auth-service: scopes ai.invoke and comm.send.
+      client-id: leados-ai
+  # The CRM's system email through Runvance Notify (notification-service docs/platform-messaging.md).
+  notify:
+    base-url: lb://notification-service
+    token-url: lb://pv-auth-service/oauth2/token
+    client-id: leados-ai
+  # Runvance Meet's API inside the network: meetings.runvance.com refuses mk_ keys.
+  meet:
+    base-url: lb://meet-api/api/v1
+  payvizio:
+    payments:
+      # Hosted checkout for plan invoices; off until PayVizio's merchant id and keys are issued
+      # (billing is trials and published prices only for now).
+      enabled: false
+  meta:
+    oauth:
+      redirect-uri: https://crm-api.runvance.com/api/v1/meta/oauth/callback
+    webhook:
+      callback-url: https://crm-api.runvance.com/api/v1/meta/webhooks/leadgen
+  ad-studio:
+    storage:
+      # The pods' file systems are per pod and lost on restart; renders and uploads live in Azure
+      # Storage (the account per environment: config/leados-api,<env>/), reached with the pods'
+      # workload identity. Lead files follow (app.lead-files.storage defaults to this).
+      provider: AZURE_BLOB
+      container-name: ad-studio
+    media:
+      # The API buffers an upload on its /tmp before the controller sees it: kept well below the pod's
+      # writable /tmp (the chart's tmpVolume).
+      max-upload-bytes: 536870912
+    enhancement:
+      provider: NONE
+      daily-gpu-hours: 1
+    # Renders run on the worker (config/leados-api,adstudio-worker), never on a pod serving requests.
+    worker:
+      enabled: false
+spring:
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
+
+# Outbound targets of this service (docs/platform-contract.md, "Circuit breakers, retries,
+# timeouts"). Every instance inherits config/application's "default"; only what differs is here.
+# The platform services (ai-service, notification-service, pv-auth-service) use the shared instances
+# as they are. A breaker per customer webhook host (workflow-webhook:<host>,
+# integration-callback:<host>) is made on first use with the defaults.
+resilience4j:
+  circuitbreaker:
+    instances:
+      ai-service-media:                     # transcription and speech: a long recording takes minutes
+        slow-call-duration-threshold: 30m
+      meta-graph:
+        slow-call-duration-threshold: 30s
+      whatsapp-cloud:
+        slow-call-duration-threshold: 30s
+      myoperator-recordings:
+        slow-call-duration-threshold: 2m
+      telecmi-recordings:
+        slow-call-duration-threshold: 2m
+      azure-blob:                           # uploads of source videos up to 512 MB
+        slow-call-duration-threshold: 5m
+      seedvr:                               # the GPU worker, minutes per minute of footage
+        slow-call-duration-threshold: 30m
+  timelimiter:
+    instances:
+      ai-service-media:
+        timeout-duration: 30m
+      meta-graph:                           # room for a campaign's image upload
+        timeout-duration: 60s
+      whatsapp-cloud:                       # media uploads
+        timeout-duration: 60s
+      sendgrid:                             # the lead inbox's sends from customers' own senders
+        timeout-duration: 30s
+      myoperator:
+        timeout-duration: 30s
+      myoperator-recordings:
+        timeout-duration: 2m
+      telecmi:
+        timeout-duration: 30s
+      telecmi-recordings:
+        timeout-duration: 2m
+      google:                               # OAuth and Sheets
+        timeout-duration: 30s
+      meet-api:                             # a rep is waiting
+        timeout-duration: 15s
+      enquiry-api:                          # the enquiries list, while the page waits
+        timeout-duration: 15s
+      payvizio-payments:
+        timeout-duration: 20s
+      seedvr:
+        timeout-duration: 30m
+      workflow-webhook:                     # one short attempt: a workflow doesn't wait out an outage
+        timeout-duration: 5s
+      integration-callback:                 # delivery receipts; the outbox retries for about two days
+        timeout-duration: 10s

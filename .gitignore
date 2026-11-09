@@ -1,1 +1,6 @@
 sss
+# Local secrets and generated tokens never go into git
+.env
+*.token
+secrets/
+.DS_Store

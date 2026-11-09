@@ -1,0 +1,170 @@
+# Runvance Payroll (PeopleVizio, repo hr-ai-solution): its RBAC catalog in pv-auth-service.
+# Permission keys are the {resource}.{action} codes the product always had; roles and their
+# default grants are StandardRoles (hrms-app). pg-api-gateway checks them per route
+# (pg-api-gateway/conf.d/payroll.yml). User, role and permission management (formerly
+# /api/v1/users, /roles, /permissions, /rbac) is pv-auth-service's now, so user.*, role.* and
+# permission.* are gone from the list.
+#
+# Payroll's backend calls the platform with one SERVICE client (registered through the admin API, not
+# here): client_id payroll-svc, product payroll, scopes ai.invoke (runvance-ai-service) and comm.send
+# (Runvance Notify); its secret is Key Vault peoplevizio-service-client-secret (SERVICE_CLIENT_SECRET).
+# It replaces the payroll-ai client (ai.invoke only) of the first AI migration.
+auth:
+  catalog:
+    payroll:
+      name: Runvance Payroll
+      origins: [https://payroll.runvance.com, http://payroll.localhost:8080]
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: Employee records, attendance and payroll
+        category: People
+        color: "#047857"
+        order: 30
+      # pv-auth-service's /signup creates an organization for Payroll; PeopleVizio creates and
+      # seeds the matching tenant on the first request (code = organization alias).
+      self-signup: true
+      signup-role: tenant_admin
+      permissions:
+        tenant.read: Read organization settings
+        tenant.create: Create organization settings
+        tenant.update: Update organization settings
+        tenant.delete: Delete organization settings
+        employee.read: Read employees
+        employee.create: Create employees
+        employee.update: Update employees
+        employee.delete: Delete employees
+        org_unit.read: Read org structure
+        org_unit.create: Create org structure
+        org_unit.update: Update org structure
+        org_unit.delete: Delete org structure
+        document.read: Read documents
+        document.create: Create documents
+        document.update: Update documents
+        document.delete: Delete documents
+        requisition.read: Read recruitment
+        requisition.create: Create recruitment
+        requisition.update: Update recruitment
+        requisition.delete: Delete recruitment
+        onboarding.read: Read onboarding
+        onboarding.create: Create onboarding
+        onboarding.update: Update onboarding
+        onboarding.delete: Delete onboarding
+        attendance.read: Read attendance
+        attendance.create: Create attendance
+        attendance.update: Update attendance
+        attendance.delete: Delete attendance
+        leave.read: Read leave
+        leave.create: Create leave
+        leave.update: Update leave
+        leave.delete: Delete leave
+        payroll.read: Read the organization's payroll (everyone's payslips, runs, statutory files)
+        payroll.create: Create payroll
+        payroll.update: Update payroll
+        payroll.delete: Delete payroll
+        goal.read: Read goals and succession
+        goal.create: Create goals and succession
+        goal.update: Update goals and succession
+        goal.delete: Delete goals and succession
+        course.read: Read learning
+        course.create: Create learning
+        course.update: Update learning
+        course.delete: Delete learning
+        recognition.read: Read rewards and recognition
+        recognition.create: Create rewards and recognition
+        recognition.update: Update rewards and recognition
+        recognition.delete: Delete rewards and recognition
+        expense.read: Read expenses and travel
+        expense.create: Create expenses and travel
+        expense.update: Update expenses and travel
+        expense.delete: Delete expenses and travel
+        ticket.read: Read helpdesk tickets
+        ticket.create: Create helpdesk tickets
+        ticket.update: Update helpdesk tickets
+        ticket.delete: Delete helpdesk tickets
+        workflow.read: Read workflows
+        workflow.create: Create workflows
+        workflow.update: Update workflows
+        workflow.delete: Delete workflows
+        audit_log.read: Read audit logs
+        audit_log.create: Create audit logs
+        audit_log.update: Update audit logs
+        audit_log.delete: Delete audit logs
+        asset.read: Read assets
+        asset.create: Create assets
+        asset.update: Update assets
+        asset.delete: Delete assets
+        exit.read: Read exits
+        exit.create: Create exits
+        exit.update: Update exits
+        exit.delete: Delete exits
+        announcement.read: Read announcements
+        announcement.create: Create announcements
+        announcement.update: Update announcements
+        announcement.delete: Delete announcements
+        survey.read: Read surveys
+        survey.create: Create surveys
+        survey.update: Update surveys
+        survey.delete: Delete surveys
+        feedback.read: Read feedback
+        feedback.create: Create feedback
+        feedback.update: Update feedback
+        feedback.delete: Delete feedback
+        policy.read: Read policies and ER cases
+        policy.create: Create policies and ER cases
+        policy.update: Update policies and ER cases
+        policy.delete: Delete policies and ER cases
+        compliance.read: Read compliance watches
+        compliance.create: Create compliance watches
+        compliance.update: Update compliance watches
+        compliance.delete: Delete compliance watches
+        ai_assistant.read: Read the AI assistant
+        ai_assistant.create: Create the AI assistant
+        ai_assistant.update: Update the AI assistant
+        ai_assistant.delete: Delete the AI assistant
+        attrition.read: Read attrition and workforce plans
+        attrition.create: Create attrition and workforce plans
+        attrition.update: Update attrition and workforce plans
+        attrition.delete: Delete attrition and workforce plans
+        benefits.read: Read benefits
+        benefits.create: Create benefits
+        benefits.update: Update benefits
+        benefits.delete: Delete benefits
+      roles:
+        tenant_admin:
+          name: Tenant administrator
+          description: "Full access to the organization"
+          permissions: ["*"]
+        hr_manager:
+          name: HR manager
+          description: "Full HR modules: employees, leave, attendance, payroll, recruitment, performance, onboarding"
+          permissions: [employee.read, employee.create, employee.update, employee.delete, org_unit.read, org_unit.create, org_unit.update, org_unit.delete, document.read, document.create, document.update, document.delete, requisition.read, requisition.create, requisition.update, requisition.delete, onboarding.read, onboarding.create, onboarding.update, onboarding.delete, attendance.read, attendance.create, attendance.update, attendance.delete, leave.read, leave.create, leave.update, leave.delete, payroll.read, payroll.create, payroll.update, payroll.delete, goal.read, goal.create, goal.update, goal.delete, course.read, course.create, course.update, course.delete, recognition.read, recognition.create, recognition.update, recognition.delete, expense.read, expense.create, expense.update, expense.delete, ticket.read, ticket.create, ticket.update, ticket.delete, workflow.read, workflow.create, workflow.update, workflow.delete, asset.read, asset.create, asset.update, asset.delete, exit.read, exit.create, exit.update, exit.delete, announcement.read, announcement.create, announcement.update, announcement.delete, survey.read, survey.create, survey.update, survey.delete, feedback.read, feedback.create, feedback.update, feedback.delete, policy.read, policy.create, policy.update, policy.delete, compliance.read, compliance.create, compliance.update, compliance.delete, ai_assistant.read, ai_assistant.create, ai_assistant.update, ai_assistant.delete, attrition.read, attrition.create, attrition.update, attrition.delete, benefits.read, benefits.create, benefits.update, benefits.delete]
+        hr_admin:
+          name: HR administrator
+          description: "Same as HR manager (kept for existing assignments)"
+          permissions: [employee.read, employee.create, employee.update, employee.delete, org_unit.read, org_unit.create, org_unit.update, org_unit.delete, document.read, document.create, document.update, document.delete, requisition.read, requisition.create, requisition.update, requisition.delete, onboarding.read, onboarding.create, onboarding.update, onboarding.delete, attendance.read, attendance.create, attendance.update, attendance.delete, leave.read, leave.create, leave.update, leave.delete, payroll.read, payroll.create, payroll.update, payroll.delete, goal.read, goal.create, goal.update, goal.delete, course.read, course.create, course.update, course.delete, recognition.read, recognition.create, recognition.update, recognition.delete, expense.read, expense.create, expense.update, expense.delete, ticket.read, ticket.create, ticket.update, ticket.delete, workflow.read, workflow.create, workflow.update, workflow.delete, asset.read, asset.create, asset.update, asset.delete, exit.read, exit.create, exit.update, exit.delete, announcement.read, announcement.create, announcement.update, announcement.delete, survey.read, survey.create, survey.update, survey.delete, feedback.read, feedback.create, feedback.update, feedback.delete, policy.read, policy.create, policy.update, policy.delete, compliance.read, compliance.create, compliance.update, compliance.delete, ai_assistant.read, ai_assistant.create, ai_assistant.update, ai_assistant.delete, attrition.read, attrition.create, attrition.update, attrition.delete, benefits.read, benefits.create, benefits.update, benefits.delete]
+        payroll_admin:
+          name: Payroll administrator
+          description: "Payroll and compensation"
+          permissions: [employee.read, document.read, payroll.read, payroll.create, payroll.update, payroll.delete]
+        assistant_hr:
+          name: Assistant HR
+          description: "HR support: no deletes, payroll read-only"
+          permissions: [employee.read, employee.create, employee.update, org_unit.read, org_unit.create, org_unit.update, document.read, document.create, document.update, requisition.read, requisition.create, requisition.update, onboarding.read, onboarding.create, onboarding.update, attendance.read, attendance.create, attendance.update, leave.read, leave.create, leave.update, payroll.read, goal.read, goal.create, goal.update, course.read, course.create, course.update, recognition.read, recognition.create, recognition.update, expense.read, expense.create, expense.update, ticket.read, ticket.create, ticket.update, workflow.read, workflow.create, workflow.update, asset.read, asset.create, asset.update, exit.read, exit.create, exit.update, announcement.read, announcement.create, announcement.update, survey.read, survey.create, survey.update, feedback.read, feedback.create, feedback.update, policy.read, policy.create, policy.update, compliance.read, compliance.create, compliance.update, ai_assistant.read, ai_assistant.create, ai_assistant.update, attrition.read, attrition.create, attrition.update, benefits.read, benefits.create, benefits.update]
+        hr_executive:
+          name: HR executive
+          description: "Read across HR, write on attendance, leave, helpdesk and onboarding"
+          permissions: [employee.read, org_unit.read, document.read, requisition.read, onboarding.read, onboarding.create, onboarding.update, attendance.read, attendance.create, attendance.update, leave.read, leave.create, leave.update, payroll.read, goal.read, course.read, recognition.read, expense.read, ticket.read, ticket.create, ticket.update, workflow.read, asset.read, exit.read, announcement.read, survey.read, feedback.read, policy.read, compliance.read, ai_assistant.read, attrition.read, benefits.read]
+        manager:
+          name: Manager
+          description: "Team approvals: leave, attendance, goals of direct reports"
+          permissions: [employee.read, employee.update, leave.read, leave.update, attendance.read, attendance.update, goal.read, goal.update, document.read]
+        # No payroll.read: it opens the organization's payroll (every payslip by id, run totals and
+        # drafts, statutory files, bank accounts). Own payslips need no permission: /me/payslips.
+        employee:
+          name: Employee
+          description: "Self-service: own profile, leave, attendance, payslips, expenses, tickets"
+          permissions: [employee.read, leave.read, leave.create, attendance.read, attendance.create, expense.read, expense.create, ticket.read, ticket.create, document.read, goal.read, course.read]
+        super_admin:
+          name: Platform super admin
+          description: "Cross-tenant platform administration; assign in the platform organization only"
+          permissions: ["*"]

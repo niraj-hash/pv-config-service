@@ -1,0 +1,11 @@
+apiVersion: v2
+name: consul-config
+description: >
+  Publishes this repository's config/ to the environment's Consul KV, as the Argo CD Application
+  consul-config-<env> (synced by hand, like every service): the chart carries config/ and the two
+  scripts at the pinned commit in a ConfigMap, and a PostSync Job runs scripts/sync.sh --prune
+  (which runs scripts/validate.py first) with the config-loader Consul token from Key Vault.
+  Rollback: History -> Rollback re-publishes the earlier commit's configuration.
+type: application
+version: 0.1.0
+# No appVersion: the tools image tag comes from deploy/releases/<env>/consul-config.yaml.

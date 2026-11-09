@@ -1,0 +1,45 @@
+# Runvance CRM (LeadOS) prices: the one place they are set.
+# Read only by this product (its own Consul token) and platform admins: never by the website or
+# any anonymous visitor. Prices are given on request. Change a price here, sync, restart the service:
+# it writes these plans into its own database at start-up (adding new plans, never deleting any),
+# and its superadmins can no longer edit prices in the app.
+#
+# Schema (scripts/validate.py checks it): currency (ISO 4217), tax-percent, per (what one price
+# is for, each month: organization | employee), plans.<CODE>: name, description, monthly and
+# yearly (major units, e.g. rupees; null = quoted on request), trial-days, order, recommended,
+# limits (the product's own keys; null = unlimited), features (shown to signed-in customers).
+# From org.subscription_plans (V5__plan_entitlements_and_branding.sql), 2026-11-09. LeadOS bills
+# monthly only (no yearly price); trial: Growth for 14 days (TRIAL_DAYS). features are its feature
+# flags; limits -1 in the database = null here.
+pv:
+  pricing:
+    product: leados
+    currency: INR
+    tax-percent: 18
+    per: organization
+    plans:
+      FREE:
+        name: Free
+        monthly: 0
+        yearly: null
+        trial-days: 0
+        order: 1
+        limits: { seats: 3, projects: 1, leads_per_month: 500, routing_rules: 3, whatsapp_messages_per_month: 0 }
+        features: { meta_integration: true, whatsapp_campaigns: false, custom_fields: true, routing_rules: true, branding: false }
+      GROWTH:
+        name: Growth
+        monthly: 4999
+        yearly: null
+        trial-days: 14
+        order: 2
+        recommended: true
+        limits: { seats: 15, projects: 5, leads_per_month: 10000, routing_rules: 25, whatsapp_messages_per_month: 25000 }
+        features: { meta_integration: true, whatsapp_campaigns: true, custom_fields: true, routing_rules: true, branding: true }
+      SCALE:
+        name: Scale
+        monthly: 14999
+        yearly: null
+        trial-days: 0
+        order: 3
+        limits: { seats: null, projects: null, leads_per_month: null, routing_rules: null, whatsapp_messages_per_month: null }
+        features: { meta_integration: true, whatsapp_campaigns: true, custom_fields: true, routing_rules: true, branding: true }

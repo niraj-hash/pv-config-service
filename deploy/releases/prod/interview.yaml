@@ -1,0 +1,14 @@
+# interview in prod: what Argo CD deploys when someone presses Sync on interview-prod.
+# Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
+# History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
+#
+#   interviewai-api       acrrunvanceprod.azurecr.io/interviewai-api:(none)
+#   interviewai-migrator  acrrunvanceprod.azurecr.io/interviewai-migrator:(none)
+#   interviewai-web       acrrunvanceprod.azurecr.io/interviewai-web:(none)
+releaseOf: interview
+# Not released yet: no Application until a release names the chart's commit.
+chartRevision: "unreleased"
+# Chart values (this file is the chart's last value file): the image tags.
+common:
+  image:
+    tag: ""
