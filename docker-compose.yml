@@ -1,0 +1,22 @@
+# Local Consul for pv-config-service (configuration + discovery), ACLs on, default deny.
+#   docker compose up -d
+#   scripts/bootstrap-acl.sh --init
+#   CONSUL_HTTP_TOKEN=$(cat secrets/config-loader.token) scripts/sync.sh
+# UI: http://127.0.0.1:8500 (sign in with secrets/management.token)
+services:
+  consul:
+    image: hashicorp/consul:2.0.4
+    command: agent -config-file=/consul/config/server.hcl
+    ports:
+      - "127.0.0.1:8500:8500"
+      - "127.0.0.1:8600:8600/udp"
+    volumes:
+      - ./consul/server.hcl:/consul/config/server.hcl:ro
+      - consul-data:/consul/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8500/v1/status/leader"]
+      interval: 5s
+      retries: 20
+
+volumes:
+  consul-data:

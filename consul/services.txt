@@ -1,0 +1,13 @@
+# Every service that reads configuration from Consul and registers for discovery, one per line
+# (its spring.application.name). scripts/bootstrap-acl.sh gives each its own policy and token.
+pg-api-gateway
+pv-auth-service
+leados-api
+payroll-api
+demoagent-platform
+hms-api
+notification-service
+runvance-accelerator
+interview-api
+meet-api
+ai-service

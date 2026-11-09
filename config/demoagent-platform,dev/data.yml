@@ -1,0 +1,33 @@
+# Runvance Connect run locally (ai-demo-agent scripts/dev.sh: profile dev, with Consul): config/demoagent-platform is
+# every environment's, so its values go back to the local ones here, which ai-demo-agent's .env sets (the same
+# placeholders as application.yml).
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+platform:
+  public-web-url: ${PLATFORM_PUBLIC_WEB_URL:http://localhost:3000}
+  admin-url: ${PLATFORM_ADMIN_URL:http://localhost:3001}
+  assessment-url: ${PLATFORM_ASSESSMENT_URL:${PLATFORM_ADMIN_URL:http://localhost:3001}}
+  api-url: ${PLATFORM_API_URL:http://localhost:8080}
+  worker:
+    url: ${WORKER_URL:}
+  call:
+    jitsi-domain: ${PLATFORM_CALL_JITSI_DOMAIN:}
+  api-keys:
+    environment: ${PLATFORM_API_KEY_ENV:test}
+  providers:
+    llm: ${LLM_PROVIDER:mock}
+    embeddings: ${EMBEDDINGS_PROVIDER:local}
+    stt: ${STT_PROVIDER:browser}
+    tts: ${TTS_PROVIDER:browser}
+    email: ${EMAIL_PROVIDER:log}
+    whatsapp: ${WHATSAPP_PROVIDER:log}
+  whatsapp:
+    leados:
+      base-url: ${LEADOS_BASE_URL:}
+  seed:
+    enabled: ${PLATFORM_SEED_ENABLED:false}
+    file: ${PLATFORM_SEED_FILE:}
+    admin-email: ${PLATFORM_SEED_ADMIN_EMAIL:}

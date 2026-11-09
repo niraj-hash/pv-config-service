@@ -1,0 +1,53 @@
+# Runvance Notify prices and monthly quotas: the one place they are set.
+# Read only by this product (its own Consul token) and platform admins: never by the website or
+# any anonymous visitor. Prices are given on request. Change a price here, sync, restart the service:
+# it writes these plans into its own database at start-up (adding new plans, never deleting any),
+# and its superadmins can no longer edit prices in the app.
+#
+# Schema (scripts/validate.py checks it): currency (ISO 4217), tax-percent, per (what one price
+# is for, each month: organization | employee), plans.<CODE>: name, description, monthly and
+# yearly (major units, e.g. rupees; null = quoted on request), trial-days, order, recommended,
+# limits (the product's own keys; null = unlimited), features (shown to signed-in customers).
+# Quotas from PlanTier (FREE 1,000 / STARTER 50,000 / GROWTH 500,000 / ENTERPRISE unlimited);
+# prices from the old landing page ($0 / $29 / $99 / quoted), 2026-11-09. No tax rate was ever set.
+# "Priority queue" and "SSO & dedicated infra" are left out: neither is built.
+pv:
+  pricing:
+    product: notification
+    currency: USD
+    tax-percent: null
+    per: organization
+    plans:
+      FREE:
+        name: Free
+        monthly: 0
+        yearly: null
+        trial-days: 0
+        order: 1
+        limits: { notifications-per-month: 1000 }
+        features: ["Email, SMS and WhatsApp", "Bring your own providers", "Templates & analytics", "Community support"]
+      STARTER:
+        name: Starter
+        monthly: 29
+        yearly: null
+        trial-days: 0
+        order: 2
+        recommended: true
+        limits: { notifications-per-month: 50000 }
+        features: ["Everything in Free", "Webhooks & API keys", "Suppression & consent tools", "Email support"]
+      GROWTH:
+        name: Growth
+        monthly: 99
+        yearly: null
+        trial-days: 0
+        order: 3
+        limits: { notifications-per-month: 500000 }
+        features: ["Everything in Starter", "Scheduled & bulk sends", "Priority support"]
+      ENTERPRISE:
+        name: Enterprise
+        monthly: null
+        yearly: null
+        trial-days: 0
+        order: 4
+        limits: { notifications-per-month: null }
+        features: ["Everything in Growth", "SLA & DPA", "Dedicated success manager"]

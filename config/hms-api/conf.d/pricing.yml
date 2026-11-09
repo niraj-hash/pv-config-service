@@ -1,0 +1,47 @@
+# Runvance Health prices: the one place they are set.
+# Read only by this product (its own Consul token) and platform admins: never by the website or
+# any anonymous visitor. Prices are given on request. Change a price here, sync, restart the service:
+# it writes these plans into its own database at start-up (adding new plans, never deleting any),
+# and its superadmins can no longer edit prices in the app.
+#
+# Schema (scripts/validate.py checks it): currency (ISO 4217), tax-percent, per (what one price
+# is for, each month: organization | employee), plans.<CODE>: name, description, monthly and
+# yearly (major units, e.g. rupees; null = quoted on request), trial-days, order, recommended,
+# limits (the product's own keys; null = unlimited), features (shown to signed-in customers).
+# From PlanPricingService.seedDefaults(), 2026-11-09 (not marketing/pricing.html, which disagreed).
+# Codes are SubscriptionPlan values. limits null = unlimited.
+pv:
+  pricing:
+    product: hms
+    currency: INR
+    tax-percent: 18
+    per: organization
+    plans:
+      BASIC:
+        name: Basic
+        description: For small clinics getting started
+        monthly: 999
+        yearly: 9999
+        trial-days: 14
+        order: 0
+        limits: { max-doctors: 3, max-users: 5, max-patients: 500, max-appointments-per-month: 200, max-storage-gb: 5 }
+        features: ["OPD only", "Appointments + Prescriptions", "Patient registry up to 500", "Email support"]
+      PRO:
+        name: Professional
+        description: For growing hospitals
+        monthly: 3999
+        yearly: 39999
+        trial-days: 14
+        order: 1
+        recommended: true
+        limits: { max-doctors: 15, max-users: 30, max-patients: 5000, max-appointments-per-month: 2000, max-storage-gb: 50 }
+        features: ["Everything in Basic", "IPD + Beds", "Pharmacy + Lab", "Inventory + Insurance", "WhatsApp / SMS hooks", "Priority support"]
+      ENTERPRISE:
+        name: Enterprise Hospital ERP
+        description: 2000-bed multi-specialty tertiary hospitals
+        monthly: 49999
+        yearly: 499999
+        trial-days: 30
+        order: 2
+        limits: { max-doctors: null, max-users: null, max-patients: null, max-appointments-per-month: null, max-storage-gb: 2000 }
+        features: ["Everything in Professional", "2000-bed infrastructure seed", "Real-time bed board & command center", "Charge master + hospital billing engine", "Emergency, OT & nursing modules", "General ledger & finance", "Unlimited users", "Dedicated CSM + SLA"]

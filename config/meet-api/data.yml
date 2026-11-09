@@ -1,0 +1,28 @@
+# Runvance Meet (ai-demo-agent meet/api, spring.application.name meet-api): what every environment runs with (staging
+# and prod answer the same meetings.runvance.com; docs/runtime.md). Moved here on 2026-11-09 from the retired Container
+# Apps deployment (ai-demo-agent infra/azure/meet.sh). Safe local defaults stay in meet/api application.yml; deployment
+# facts (the database host) in the chart's values-<env>.yaml (ai-demo-agent deploy/helm/meet); secrets in Key Vault (the
+# chart's values.yaml names them: MEET_SECRET, MEET_JITSI_SECRET, SERVICE_CLIENT_SECRET, the database password). Local
+# runs (profile local) read config/meet-api,local instead. Prices: conf.d/pricing.yml.
+meet:
+  # Where people open Meet, through pg-api-gateway (conf.d/meet.yml): the links in emails point here.
+  public-url: https://meetings.runvance.com
+  brand-name: Runvance Meet
+  network:
+    # Proxies in front of the API that append to X-Forwarded-For: the ingress controller and pg-api-gateway.
+    trusted-proxy-hops: 2
+  jitsi:
+    # The token-only Jitsi on its own VM (ai-demo-agent deploy/README.md, "Jitsi"); JWT_ACCEPTED_ISSUERS there is demoagent.
+    domain: meet.runvance.com
+    app-id: demoagent
+  email:
+    # Every email (invitations, join requests, account decisions) through Runvance Notify, under Meet's name.
+    provider: notify
+  # Notify's internal API and Meet's SERVICE client in pv-auth-service (scope comm.send). Its secret is
+  # SERVICE_CLIENT_SECRET (Key Vault meet-api-service-client-secret).
+  notification:
+    url: lb://notification-service
+    token-url: lb://pv-auth-service/oauth2/token
+    client-id: meet-svc
+# Outbound resilience: Meet calls only Runvance Notify and pv-auth-service, whose instances (and the defaults) are
+# config/application's. Nothing of its own.

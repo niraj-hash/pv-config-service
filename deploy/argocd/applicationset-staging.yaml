@@ -1,0 +1,174 @@
+# One Application per Runvance service in staging: <service>-staging (docs/deploy-with-argocd.md).
+#
+# Two generators merged on `releaseOf` (the service; not `service`, which the library chart uses
+# for the Kubernetes Service, and the release file is also a value file):
+#   - the release files, deploy/releases/staging/<service>.yaml in pv-config-service (main): which
+#     commit of the chart to render (chartRevision) and the image tags. A service whose file says
+#     `chartRevision: unreleased` gets no Application yet (the selector below).
+#   - the list below: what never changes between releases (repository, chart, namespace, value files).
+#     It is merged over the release file, so a release file cannot move a service to another
+#     repository or namespace.
+#
+# Every Application syncs only by hand: no `automated` block. Merging a release file makes the
+# Application OutOfSync and nothing more; Sync deploys it, History -> Rollback goes back.
+# The release file is also the chart's last value file ($releases/...), so the image tags in it win.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: runvance-staging
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    # Removing a service here (or this ApplicationSet) never deletes what runs: the Applications carry
+    # no resources finalizer, and the controller only creates and updates them.
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  generators:
+    - merge:
+        mergeKeys: [releaseOf]
+        generators:
+          - git:
+              repoURL: git@github.com:niraj-hash/pv-config-service.git
+              revision: main
+              files:
+                - path: deploy/releases/staging/*.yaml
+          - list:
+              elements:
+                - releaseOf: pg-api-gateway
+                  repoURL: git@github.com:payvizio-pg/pg-api-gateway.git
+                  chartPath: deploy/helm/pg-api-gateway
+                  releaseName: pg-api-gateway
+                  namespace: pg-api-gateway
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: pv-auth-service
+                  repoURL: git@github.com:niraj-hash/pv-auth-service.git
+                  chartPath: deploy/helm/pv-auth-service
+                  releaseName: pv-auth-service
+                  namespace: runvance-platform   # shared with the platform Redis: exists already, never created here
+                  createNamespace: false
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: notification-service
+                  repoURL: git@github.com:payvizio-pg/notification-service.git
+                  chartPath: deploy/helm/notification-service
+                  releaseName: notification-service
+                  namespace: notification
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: ai-service
+                  repoURL: git@github.com:niraj-hash/runvance-ai-service.git
+                  chartPath: deploy/helm/ai-service
+                  releaseName: ai-service
+                  namespace: runvance-ai
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: consul-config
+                  repoURL: git@github.com:niraj-hash/pv-config-service.git
+                  chartPath: deploy/consul-config
+                  releaseName: consul-config
+                  namespace: pv-config
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: leados
+                  repoURL: git@github.com:Payvizio-Technologies/PayVizio-LeadOS.git
+                  chartPath: deploy/helm/leados
+                  releaseName: leados
+                  namespace: leados
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: peoplevizio
+                  repoURL: git@github.com:heimdal01/hr-ai-solution.git
+                  chartPath: deploy/helm/peoplevizio
+                  releaseName: peoplevizio
+                  namespace: peoplevizio
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: hms
+                  repoURL: git@github.com:niraj-hash/hms.git
+                  chartPath: deploy/helm/hms
+                  releaseName: hms
+                  namespace: hms
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: demoagent
+                  repoURL: git@github.com:niraj-hash/ai-demo-agent.git
+                  chartPath: deploy/helm/demoagent
+                  releaseName: demoagent
+                  namespace: demoagent
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: meet
+                  repoURL: git@github.com:niraj-hash/ai-demo-agent.git
+                  chartPath: deploy/helm/meet
+                  releaseName: meet
+                  namespace: meet
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: interview
+                  repoURL: git@github.com:niraj-hash/interview-ai-management.git
+                  chartPath: infrastructure/helm/interview-ai
+                  # The chart's own choice (app.kubernetes.io/instance is part of its selectors).
+                  releaseName: interview-ai
+                  namespace: interviewai
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+                - releaseOf: runvance-accelerator
+                  repoURL: git@github.com:niraj-hash/runvance.git
+                  chartPath: accelerator/deploy/helm/runvance-accelerator
+                  releaseName: runvance-accelerator
+                  namespace: runvance
+                  createNamespace: true
+                  valueFiles: [values.yaml, values-staging.yaml]
+      selector:
+        matchExpressions:
+          - { key: chartRevision, operator: NotIn, values: [unreleased] }
+  template:
+    metadata:
+      name: "{{ .releaseOf }}-staging"
+      labels:
+        runvance.com/service: "{{ .releaseOf }}"
+        runvance.com/environment: staging
+      annotations:
+        # Diff through a server-side dry run, as the sync applies (ServerSideApply): fields the API
+        # server or a CRD defaults (ExternalSecret, HPA) do not show as OutOfSync, so OutOfSync means
+        # a release is waiting.
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
+    spec:
+      project: runvance
+      revisionHistoryLimit: 20   # what History -> Rollback can go back to
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .namespace }}"
+  # Lists (value files, sources) cannot be substituted into the typed template; patched in instead.
+  templatePatch: |
+    spec:
+      info:
+        - name: Release file
+          value: pv-config-service deploy/releases/staging/{{ .releaseOf }}.yaml
+        - name: Deploy and roll back
+          value: pv-config-service docs/deploy-with-argocd.md
+      sources:
+        - repoURL: {{ .repoURL | quote }}
+          targetRevision: {{ .chartRevision | quote }}
+          path: {{ .chartPath | quote }}
+          helm:
+            releaseName: {{ .releaseName | quote }}
+            valueFiles:
+            {{- range .valueFiles }}
+              - {{ . | quote }}
+            {{- end }}
+              - {{ printf "$releases/deploy/releases/staging/%s.yaml" .releaseOf | quote }}
+        - repoURL: git@github.com:niraj-hash/pv-config-service.git
+          targetRevision: main
+          ref: releases
+      syncPolicy:
+        syncOptions:
+          - ServerSideApply=true
+          - PruneLast=true
+          - FailOnSharedResource=true
+          - CreateNamespace={{ .createNamespace }}
+        retry:
+          limit: 2
+          backoff: { duration: 10s, factor: 2, maxDuration: 1m }

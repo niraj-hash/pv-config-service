@@ -1,0 +1,46 @@
+# Runvance Payroll prices: the one place they are set.
+# Read only by this product (its own Consul token) and platform admins: never by the website or
+# any anonymous visitor. Prices are given on request. Change a price here, sync, restart the service:
+# it writes these plans into its own database at start-up (adding new plans, never deleting any),
+# and its superadmins can no longer edit prices in the app.
+#
+# Schema (scripts/validate.py checks it): currency (ISO 4217), tax-percent, per (what one price
+# is for, each month: organization | employee), plans.<CODE>: name, description, monthly and
+# yearly (major units, e.g. rupees; null = quoted on request), trial-days, order, recommended,
+# limits (the product's own keys; null = unlimited), features (shown to signed-in customers).
+# From subscription_plans (V1827__billing_init.sql), confirmed by the owner 2026-11-09: ₹99 / ₹199 per
+# employee per month (in the database: monthly_price 0, per_employee_overage = monthly here).
+# No yearly price (annual_price 0). "SSO / SAML / SCIM" is dropped from Enterprise: sign-in is the
+# Runvance account service, which has no customer SSO yet.
+pv:
+  pricing:
+    product: payroll
+    currency: INR
+    tax-percent: 18
+    per: employee
+    plans:
+      STARTER:
+        name: Starter
+        description: Small teams putting the HR basics in one place.
+        monthly: 99
+        yearly: null
+        trial-days: 14
+        order: 1
+        features: ["Core HR", "Leave", "Attendance", "Employee Self-Service", "Per-tenant branding", "Document vault", "Email support"]
+      GROWTH:
+        name: Growth
+        description: Mid-market companies running full HR operations.
+        monthly: 199
+        yearly: null
+        trial-days: 14
+        order: 2
+        recommended: true
+        features: ["Core HR + Payroll (India)", "Performance + Recruitment + Onboarding", "Tax declaration (OLD + NEW regime)", "Approval workflows with SLA escalation", "Public career site", "Letter templates", "Priority email + chat support"]
+      ENTERPRISE:
+        name: Enterprise
+        description: Large organisations with custom compliance and dedicated support.
+        monthly: null
+        yearly: null
+        trial-days: 30
+        order: 3
+        features: ["Everything in Growth", "Multi-country payroll (US, UK, IN)", "AI HR Assistant + Copilot + Attrition Risk", "WhatsApp + Microsoft Teams channels", "Custom data-residency", "Named CSM + 99.5% SLA"]

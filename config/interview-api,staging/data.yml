@@ -1,0 +1,36 @@
+# Runvance Interview on staging (aks-interviewai-staging, SPRING_PROFILES_ACTIVE cloud,api|worker,staging): only what
+# differs from config/interview-api/. Staging is a demo environment (owner decisions below); never copy these to a
+# production profile.
+app:
+  ai:
+    prompts:
+      # 2026-09-28: the newest prompt versions activate at start-up (audited as a system prompt.activate); the live-eval
+      # gate is waived here only. Production keeps the promotion flow (PromptPromotions).
+      auto-activate: true
+  careers:
+    challenge:
+      allow-fake: true                # ADR-0045: no real challenge provider account yet; the rate limits still apply
+  transcription:
+    # No live transcription (Deepgram in ai-service) yet: the simulator speaks; voice answers are still transcribed per
+    # turn by ai-service. Remove these four (provider back to ai-service) once ai-service has a Deepgram key (SPIKE-02).
+    provider: simulated
+    allow-simulated: true             # R1.10: the cloud profile refuses simulated STT unless this is set
+    simulator:
+      enabled: true
+      allow-in-cloud: true            # R1.11
+  assessment:
+    # R1.10: synthetic transcripts are scored so the flow can be demonstrated; every such run is flagged and the report
+    # says "Synthetic transcript - demo only, not real speech".
+    score-synthetic-transcripts: true
+  kafka:
+    replication-factor: 1             # one Redpanda broker in the lean staging cluster
+management:
+  # No OpenTelemetry collector in lean staging: nothing to send spans or metrics to (logs and metrics via Container
+  # Insights and Prometheus scraping of the management port).
+  tracing:
+    export:
+      enabled: false
+  otlp:
+    metrics:
+      export:
+        enabled: false

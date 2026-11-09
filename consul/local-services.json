@@ -1,0 +1,41 @@
+{
+  "comment": "Local dev servers that aren't Spring Boot, registered in the local Consul so pg-api-gateway finds them as lb://<name>. Start each on its port here (e.g. vite --port 5174). Spring services register themselves.",
+  "services": [
+    {
+      "name": "leados-web",
+      "port": 5173
+    },
+    {
+      "name": "peoplevizio-web",
+      "port": 5174
+    },
+    {
+      "name": "hms-web",
+      "port": 5175
+    },
+    {
+      "name": "notification-web",
+      "port": 5176
+    },
+    {
+      "name": "demoagent-web",
+      "port": 3000
+    },
+    {
+      "name": "demoagent-admin",
+      "port": 3001
+    },
+    {
+      "name": "demoagent-worker",
+      "port": 8090
+    },
+    {
+      "name": "interview-web",
+      "port": 3002
+    },
+    {
+      "name": "meet-web",
+      "port": 3010
+    }
+  ]
+}

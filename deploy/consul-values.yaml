@@ -1,0 +1,58 @@
+# Production Consul on Kubernetes (hashicorp/consul Helm chart): configuration (KV) and service
+# discovery for every PayVizio service.
+#   helm repo add hashicorp https://helm.releases.hashicorp.com
+#   helm upgrade --install consul hashicorp/consul -n consul --create-namespace -f deploy/consul-values.yaml
+global:
+  name: consul
+  datacenter: pv-dc1
+  # Default-deny ACLs; the bootstrap token lands in a Kubernetes Secret. Per-service policies and
+  # tokens come from scripts/bootstrap-acl.sh.
+  acls:
+    manageSystemACLs: true
+  tls:
+    enabled: true
+    enableAutoEncrypt: true
+    verify: true
+  gossipEncryption:
+    autoGenerate: true
+
+server:
+  replicas: 3
+  bootstrapExpect: 3
+  storage: 10Gi
+  # Spread servers over nodes and zones so losing one never loses quorum.
+  affinity: |
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app: consul
+              component: server
+          topologyKey: kubernetes.io/hostname
+
+# Every node runs a client agent; Spring services register through the agent on their node.
+client:
+  enabled: true
+
+# Consul DNS (<service>.service.consul) for clients that aren't Spring (the demo browser worker).
+dns:
+  enabled: true
+
+# Services that aren't Spring Boot (the web apps, the demo browser worker) don't register
+# themselves: catalog sync copies each Kubernetes Service in these namespaces into Consul under the
+# Service's name, with its endpoints, so pg-api-gateway reaches them as lb://<name> like any other.
+syncCatalog:
+  enabled: true
+  toConsul: true
+  toK8S: false
+  default: false   # only Services annotated consul.hashicorp.com/service-sync: "true"
+  addK8SNamespaceSuffix: false
+  k8sAllowNamespaces: ["leados", "peoplevizio", "demoagent", "meet", "hms", "notification", "runvance", "interviewai"]
+
+# No service mesh: services reach each other through discovery; the gateway is the only edge.
+connectInject:
+  enabled: false
+ui:
+  enabled: true
+  service:
+    type: ClusterIP   # reach it with kubectl port-forward; never public

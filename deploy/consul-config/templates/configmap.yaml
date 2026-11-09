@@ -1,0 +1,27 @@
+{{- /*
+config/ and the two scripts at the commit Argo CD renders, one key per file (a key cannot hold "/" or
+","; index.json maps each key back to its path). Argo CD's diff of this ConfigMap is the configuration
+change a Sync publishes.
+*/ -}}
+{{- $index := include "consul-config.files" . | fromJson -}}
+{{- if not (hasKey $index "config__application__data.yml") -}}
+{{- fail "consul-config: files/config is empty (the symlink to config/ is missing?)" -}}
+{{- end -}}
+{{- $total := 0 -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consul-config-files
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "consul-config.labels" . | nindent 4 }}
+data:
+  index.json: {{ toJson $index | toJson }}
+{{- range $key := keys $index | sortAlpha }}
+{{- $content := $.Files.Get (printf "files/%s" (get $index $key)) }}
+{{- $total = add $total (len $content) }}
+  {{ $key }}: {{ $content | toJson }}
+{{- end }}
+{{- if gt (int $total) 900000 }}
+{{- fail (printf "consul-config: config/ is %d bytes, too close to a ConfigMap's 1 MiB limit" (int $total)) }}
+{{- end }}

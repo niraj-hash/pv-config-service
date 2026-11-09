@@ -1,0 +1,7 @@
+# ai-service on a developer's machine (AI_CONFIG_PROFILE=local): pv-auth-service's local issuer,
+# and discovery that tolerates instances Consul in Docker cannot health-check.
+ai:
+  auth:
+    issuer: http://accounts.localhost:8080
+  consul:
+    only-passing: false

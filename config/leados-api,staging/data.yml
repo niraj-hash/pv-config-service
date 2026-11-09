@@ -1,0 +1,13 @@
+# leados-api on the staging cluster (aks-interviewai-staging): only what differs from
+# config/leados-api/data. Non-secret only.
+app:
+  crm:
+    # The user id recorded as the actor of what the system does (leads captured from Meta). Any fixed
+    # UUID for a new environment; never change it once data exists.
+    system-actor-user-id: 87a983aa-70ff-4509-a79d-0a0c34c666e7
+  ad-studio:
+    storage:
+      # TODO(owner): the staging storage account (not created yet; the chart's workload identity
+      # needs "Storage Blob Data Contributor" on it). Containers ad-studio and lead-files are made on
+      # first use.
+      account-endpoint: https://leadosstaging.blob.core.windows.net

@@ -1,0 +1,100 @@
+# Runvance Connect (ai-demo-agent services/, spring.application.name demoagent-platform): what every environment runs
+# with (staging and prod answer the same *.runvance.com hosts; docs/runtime.md). Moved here on 2026-11-09 from the
+# retired Container Apps deployment (ai-demo-agent infra/azure/deploy.sh and jitsi.sh, and the container app's settings).
+# Safe local defaults stay in services/platform-app/src/main/resources/application.yml; deployment facts (the database
+# host) in the chart's values-<env>.yaml (ai-demo-agent deploy/helm/demoagent); secrets in Key Vault (the chart's
+# values.yaml names them). Local runs (profile dev) read config/demoagent-platform,dev instead. Prices: conf.d/pricing.yml.
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10                      # one replica (the session hub is in memory); the Flexible Server's B1ms
+
+# API documentation stays off in the environments, as the container app ran.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+platform:
+  # Where people open Connect, through pg-api-gateway (config/pg-api-gateway/conf.d/demoagent.yml): links in emails,
+  # OAuth redirect URIs, assessment share links.
+  public-web-url: https://demo.runvance.com
+  admin-url: https://connect.runvance.com
+  assessment-url: https://assessment.runvance.com
+  api-url: https://connect-api.runvance.com
+  # platform.internal-url (where the browser worker posts frames, never through the gateway) is the chart's
+  # PLATFORM_INTERNAL_URL: the worker admits callbacks to that one address (CALLBACK_ALLOWED_ORIGINS).
+  worker:
+    url: lb://demoagent-worker
+  call:
+    # The token-only Jitsi on its own VM (ai-demo-agent deploy/README.md, "Jitsi"); its secret is
+    # PLATFORM_CALL_JITSI_SECRET (Key Vault demoagent-platform-jitsi-secret).
+    jitsi-domain: meet.runvance.com
+  api-keys:
+    environment: live
+  providers:
+    # Every model call through runvance-ai-service; every email through Runvance Notify; WhatsApp through Runvance CRM.
+    llm: ai-service
+    embeddings: ai-service
+    stt: ai-service
+    tts: ai-service
+    email: notify
+    whatsapp: leados
+  # Connect's one SERVICE client in pv-auth-service: scopes ai.invoke (runvance-ai-service) and comm.send (Runvance
+  # Notify). Its secret is SERVICE_CLIENT_SECRET (Key Vault demoagent-platform-service-client-secret).
+  service-client:
+    id: demoagent-svc
+    token-url: lb://pv-auth-service/oauth2/token
+  ai:
+    url: lb://ai-service
+  notify:
+    url: lb://notification-service
+  whatsapp:
+    leados:
+      # Runvance CRM's integration API inside the platform (Consul); LEADOS_API_KEY and LEADOS_STATUS_SECRET are secrets.
+      base-url: lb://leados-api
+  microsoft:
+    tenant: common
+  # TODO(owner): the Google and Microsoft OAuth client ids (not secret) belong here as platform.google.client-id and
+  # platform.microsoft.client-id; they were only in the operator's .env. Their secrets are Key Vault's.
+  seed:
+    # Imports the production bundles (products/prod-seed.yaml in the image) at start-up, as the container app did.
+    enabled: true
+    file: /app/products/prod-seed.yaml
+    admin-email: admin@runvance.com
+
+# Outbound resilience (docs/platform-contract.md): the defaults and the platform services' instances (ai-service,
+# notification-service, pv-auth-service) are config/application's. Connect's other targets, by name (kernel Outbound):
+# leados-api (Runvance CRM: WhatsApp, demo passes), demoagent-worker (the browser worker), google-calendar and
+# microsoft-graph (organizations' own calendars), hubspot, ip-lookup (IPinfo); tool-<id> and webhook-<id> (endpoints
+# tenants configure, one breaker each) inherit `default`. Only what differs from `default` is listed.
+resilience4j:
+  circuitbreaker:
+    instances:
+      demoagent-worker:
+        slow-call-duration-threshold: 310s       # reading a product's pages takes up to five minutes
+      google-calendar:
+        slow-call-duration-threshold: 15s
+      microsoft-graph:
+        slow-call-duration-threshold: 15s
+      hubspot:
+        slow-call-duration-threshold: 15s
+  retry:
+    instances:
+      ip-lookup:
+        max-attempts: 2                          # a visit's place is a nicety: one more try at most
+  timelimiter:
+    instances:
+      leados-api:
+        timeout-duration: 30s                    # template sync goes on to Meta
+      demoagent-worker:
+        timeout-duration: 300s                   # each call keeps its own shorter timeout within this
+      google-calendar:
+        timeout-duration: 15s
+      microsoft-graph:
+        timeout-duration: 15s
+      hubspot:
+        timeout-duration: 15s
+      ip-lookup:
+        timeout-duration: 4s

@@ -1,0 +1,8 @@
+# Runvance Health in production (SPRING_PROFILES_ACTIVE=prod): only what differs from config/hms-api.
+spring:
+  data:
+    mongodb:
+      # The production Cosmos DB's indexes already exist and are managed by hand: no index creation at
+      # start-up (as the Container Apps deployment ran it). A new environment's empty database (staging)
+      # keeps application.yml's true, so its compound indexes are created.
+      auto-index-creation: false

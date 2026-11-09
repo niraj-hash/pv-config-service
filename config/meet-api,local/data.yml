@@ -1,0 +1,12 @@
+# Runvance Meet run locally (ai-demo-agent meet/dev.sh: profile local, with Consul): config/meet-api is every
+# environment's, so its values go back to the local ones here, which meet/.env sets (the same placeholders as
+# application.yml).
+meet:
+  public-url: ${MEET_PUBLIC_URL:http://meet.localhost:8080}
+  network:
+    trusted-proxy-hops: ${MEET_TRUSTED_PROXY_HOPS:1}
+  jitsi:
+    domain: ${MEET_JITSI_DOMAIN:}
+    app-id: ${MEET_JITSI_APP_ID:demoagent}
+  email:
+    provider: ${MEET_EMAIL_PROVIDER:log}

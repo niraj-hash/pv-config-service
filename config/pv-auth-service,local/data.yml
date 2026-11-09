@@ -1,0 +1,3 @@
+# Local runs (SPRING_PROFILES_ACTIVE=local): reached through the gateway at accounts.localhost:8080.
+auth:
+  issuer: http://accounts.localhost:8080

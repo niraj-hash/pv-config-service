@@ -1,0 +1,11 @@
+# pv-auth-service in staging: what Argo CD deploys when someone presses Sync on pv-auth-service-staging.
+# Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
+# History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
+#
+#   pv-auth-service  acrinterviewaistaging.azurecr.io/pv-auth-service:(none)
+releaseOf: pv-auth-service
+# Not released yet: no Application until a release names the chart's commit.
+chartRevision: "unreleased"
+# Chart values (this file is the chart's last value file): the image tags.
+image:
+  tag: ""

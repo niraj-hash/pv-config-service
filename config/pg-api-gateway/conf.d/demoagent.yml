@@ -1,0 +1,1018 @@
+# Runvance Connect (repo ai-demo-agent, pv-auth-service product key "demoagent"): its public hosts and RBAC rules.
+# pg-api-gateway signs people in with pv-auth-service, applies these rules and passes the identity as X-PV-*
+# headers; the service (Consul: demoagent-platform, platform-app) has no sign-in or role checks of its own.
+#
+# The per-endpoint rules are GENERATED from ai-demo-agent services/platform-core/src/main/resources/access/
+# api-access.txt (the table the service also applies to its own API keys; ApiAccessCoverageTest keeps it equal
+# to the controllers). Change that table, then regenerate; do not edit the rule lists by hand.
+# Permissions (catalog in config/pv-auth-service/conf.d/demoagent.yml): workspace.read < demo.operate <
+# product.configure < org.manage, taken over 1:1 from the @PreAuthorize annotations they replace.
+#
+# Three gateway entries, because every route of an entry applies to all of its hosts:
+#   demoagent      the consoles (Connect and Assessment, one web app) and the person-facing API, behind sign-in;
+#   demoagent-api  the API host for machines and prospects: the service's own sk_/pk_ API keys (server-to-server),
+#                  the embeddable widget and public pages (cors *), the demo-room WebSocket (participant token),
+#                  calendar OAuth callbacks (signed state). Anonymous here: the service checks each credential;
+#   demoagent-site the prospect site (booking pages, demo rooms): pages only.
+# /internal/** (browser-worker callbacks, X-Worker-Token) is never routed: the worker calls the service inside
+# the network (PLATFORM_INTERNAL_URL).
+pv:
+  gateway:
+    products:
+      demoagent:
+        name: Runvance Connect
+        hosts: [connect.runvance.com, assessment.runvance.com, demoagent.localhost, assessment.demoagent.localhost]
+        browser-sign-in: true
+        routes:
+          - id: demoagent-console-api
+            upstream: lb://demoagent-platform
+            paths: ["/api/v1/**"]
+            access: PROTECTED
+            default-rule: DENY
+            max-body-bytes: 57671680        # product bundles and knowledge files (55 MB, as the service accepts)
+            response-timeout-ms: 300000     # AI generation (agents, manifests from a site) takes minutes
+            rules:
+              - paths: ["/api/v1/agent-personas"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/agents/{agentId}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/agents/{agentId}"]
+                methods: [PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/agents/{agentId}/eval-runs"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/agents/{agentId}/evals"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/agents/{agentId}/evals/run"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/agents/{agentId}/playground/turn"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/agents/{agentId}/publish"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/agents/{agentId}/versions"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/agents/{agentId}/versions/{versionId}/activate"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/analytics/overview"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/api-keys"]
+                methods: [GET, POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/api-keys/{id}"]
+                methods: [DELETE]
+                permissions: [org.manage]
+              - paths: ["/api/v1/assessment/applications"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/applications"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}"]
+                methods: [DELETE]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/applications/{id}/cases"]
+                methods: [POST, PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/map"]
+                methods: [PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/reset"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/runs"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/sign-in"]
+                methods: [DELETE, PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/sign-in/check"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/suite"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/applications/{id}/understand"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/runs"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/runs/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/runs/{id}/live"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/runs/{id}/screens/{idx}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/runs/{id}/shares"]
+                methods: [GET, POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/assessment/runs/{id}/test-plan.csv"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/assessment/shares/{shareId}"]
+                methods: [DELETE]
+                permissions: [product.configure]
+              - paths: ["/api/v1/audit-logs"]
+                methods: [GET]
+                permissions: [org.manage]
+              - paths: ["/api/v1/billing/subscription"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/blueprints/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/blueprints/{id}"]
+                methods: [PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/calendar/events"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/customers"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/customers/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/demo-preps"]
+                methods: [GET, POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}"]
+                methods: [DELETE, GET]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/explore"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/link"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/login"]
+                methods: [PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/manifest"]
+                methods: [GET, PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/publish"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/screens/{idx}"]
+                methods: [GET]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/send"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demos"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/demos"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/demos/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/demos/{id}/cancel"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/demos/{id}/launch"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/demos/{id}/reschedule"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/eval-runs/{runId}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/follow-ups/{id}/cancel"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/integrations"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/integrations/available"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/integrations/google-calendar/connect"]
+                methods: [GET]
+                permissions: [org.manage]
+              - paths: ["/api/v1/integrations/hubspot"]
+                methods: [POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/integrations/microsoft-calendar/connect"]
+                methods: [GET]
+                permissions: [org.manage]
+              - paths: ["/api/v1/integrations/{id}"]
+                methods: [DELETE]
+                permissions: [org.manage]
+              - paths: ["/api/v1/invitation-links/{id}"]
+                methods: [DELETE]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/invitations/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/invitations/{id}/renew"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/invitations/{id}/revoke"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/invitations/{id}/send"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/knowledge/{sourceId}"]
+                methods: [DELETE]
+                permissions: [product.configure]
+              - paths: ["/api/v1/knowledge/{sourceId}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/knowledge/{sourceId}/approve"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/knowledge/{sourceId}/preview"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/knowledge/{sourceId}/reject"]
+                methods: [POST]
+                permissions: [product.configure]
+              # Re-embedding all of an organization's knowledge on the current model (billed to it): admins only.
+              - paths: ["/api/v1/knowledge-reindex"]
+                methods: [GET, POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/leads"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/leads/delete"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/leads/{id}"]
+                methods: [DELETE]
+                permissions: [product.configure]
+              - paths: ["/api/v1/leads/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/leads/{id}"]
+                methods: [PATCH]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/leads/{id}/follow-ups"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/leads/{id}/profile"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/leads/{id}/score"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/leads/{id}/timeline"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/leads/{id}/whatsapp"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/leads/{id}/whatsapp"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/leads/{id}/whatsapp/{messageId}/cancel"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/manifests/from-site"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/manifests/import"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/organizations"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/organizations/current"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/organizations/current"]
+                methods: [PATCH]
+                permissions: [org.manage]
+              - paths: ["/api/v1/organizations/current/members"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/plans"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}"]
+                methods: [DELETE, PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/agents"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/agents"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/agents/generate"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/agents/suggestions"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/demo-login"]
+                methods: [GET, PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/demos"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/demos"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/environment"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/environment"]
+                methods: [PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/environment/validate"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/feedback"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/follow-up-rules"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/generate"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/invitation-links"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/invitation-links"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/products/{productId}/invitation-progress"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/invitation-visitors"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/invitations"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/invitations"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/products/{productId}/knowledge"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/knowledge"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/knowledge/import-pages"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/knowledge/publish"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/knowledge/search"]
+                methods: [POST]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/manifest"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/modules"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/modules"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}"]
+                methods: [DELETE, PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}/features"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}/features"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}/features/{featureId}"]
+                methods: [DELETE, PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/personas"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{id}/personas"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/publish"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/scheduling-links"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/scheduling-links"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/settings/automation"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/settings/automation"]
+                methods: [PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{productId}/tools"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/products/{productId}/tools"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/products/{id}/versions"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/questions/inbox"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/questions/resolve"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/scheduling-links/{id}"]
+                methods: [DELETE, PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/scheduling-links/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/scheduling-links/{id}/invite"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/scheduling-links/{id}/restore"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/sessions"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/sessions/test"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/sessions/{id}"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/sessions/{id}/control"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/sessions/{id}/feedback"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/sessions/{id}/insights"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/sessions/{id}/messages"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/sessions/{id}/transcript"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/sessions/{id}/turns"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/sessions/{id}/watch-token"]
+                methods: [POST]
+                permissions: [demo.operate]
+              - paths: ["/api/v1/settings/automation"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/settings/automation"]
+                methods: [PUT]
+                permissions: [org.manage]
+              - paths: ["/api/v1/tools/{toolId}"]
+                methods: [PATCH]
+                permissions: [product.configure]
+              - paths: ["/api/v1/tools/{toolId}/test"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/webhooks"]
+                methods: [GET, POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/webhooks/deliveries/{deliveryId}/retry"]
+                methods: [POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/webhooks/events"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/webhooks/{id}"]
+                methods: [DELETE, PATCH]
+                permissions: [org.manage]
+              - paths: ["/api/v1/webhooks/{id}/deliveries"]
+                methods: [GET]
+                permissions: [org.manage]
+              - paths: ["/api/v1/webhooks/{id}/rotate-secret"]
+                methods: [POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/webhooks/{id}/test"]
+                methods: [POST]
+                permissions: [org.manage]
+              - paths: ["/api/v1/whatsapp/templates"]
+                methods: [GET]
+                permissions: [workspace.read]
+              - paths: ["/api/v1/whatsapp/templates"]
+                methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/whatsapp/templates/refresh"]
+                methods: [POST]
+                permissions: [demo.operate]
+          - id: demoagent-console-web
+            access: PUBLIC
+            upstream: ${DEMOAGENT_ADMIN_URI:lb://demoagent-admin}
+
+      demoagent-api:
+        name: Runvance Connect API
+        hosts: [connect-api.runvance.com, api.demoagent.localhost]
+        browser-sign-in: false
+        routes:
+          - id: demoagent-api-socket
+            upstream: lb://demoagent-platform
+            paths: ["/ws/sessions/*"]
+            access: PROTECTED
+            response-timeout-ms: -1
+            rules:
+              - paths: ["/ws/sessions/*"]
+                anonymous: true             # ?token= participant token, checked by the service
+            # 20 connections at once, then one every two seconds, per client address (was the service's SOCKET limit).
+            rate-limit: { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 40, requested-tokens: 2 }
+          - id: demoagent-api-public
+            upstream: lb://demoagent-platform
+            paths: ["/api/v1/public/**"]
+            access: PROTECTED
+            response-timeout-ms: 120000
+            rules:
+              - paths: ["/api/v1/public/**"]
+                anonymous: true             # capability tokens in the path, pk_ keys, signed LeadOS webhook
+            # 60 at once, then two a second, per client address (was the service's PUBLIC limit).
+            rate-limit: { key: CLIENT_IP, replenish-rate: 2, burst-capacity: 60 }
+            cors:                           # the widget on customers' sites and the prospect site
+              allowed-origins: ["*"]
+              allowed-methods: [GET, POST]
+              allowed-headers: [Content-Type, Idempotency-Key, Authorization]
+              exposed-headers: [X-Trace-Id]
+          - id: demoagent-api-server
+            upstream: lb://demoagent-platform
+            paths: ["/api/v1/**"]
+            access: PROTECTED
+            default-rule: DENY
+            max-body-bytes: 57671680
+            response-timeout-ms: 300000
+            # Every endpoint is anonymous here: callers are customers' servers with this product's sk_ keys, which
+            # the service checks itself (key, organization, product scope, and the key role's permission from the
+            # same table as the console rules). A request without a valid key is refused by the service (401).
+            # pv-auth-service tokens are not accepted here: people and their apps use the console host.
+            rules:
+              - paths: ["/api/v1/agent-personas"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}"]
+                methods: [GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/eval-runs"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/evals"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/evals/run"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/playground/turn"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/publish"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/versions"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/agents/{agentId}/versions/{versionId}/activate"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/analytics/overview"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/api-keys"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/api-keys/{id}"]
+                methods: [DELETE]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}"]
+                methods: [DELETE, GET]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/cases"]
+                methods: [POST, PUT]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/map"]
+                methods: [PUT]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/reset"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/runs"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/sign-in"]
+                methods: [DELETE, PUT]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/sign-in/check"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/suite"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/applications/{id}/understand"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/runs"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/assessment/runs/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/assessment/runs/{id}/live"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/assessment/runs/{id}/screens/{idx}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/assessment/runs/{id}/shares"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/assessment/runs/{id}/test-plan.csv"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/assessment/shares/{shareId}"]
+                methods: [DELETE]
+                anonymous: true
+              - paths: ["/api/v1/audit-logs"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/billing/subscription"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/blueprints/{id}"]
+                methods: [GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/calendar/events"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/customers"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/customers/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}"]
+                methods: [DELETE, GET]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/explore"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/link"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/login"]
+                methods: [PUT]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/manifest"]
+                methods: [GET, PUT]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/publish"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/screens/{idx}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/send"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demos"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/demos/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/demos/{id}/cancel"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demos/{id}/launch"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demos/{id}/reschedule"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/eval-runs/{runId}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/follow-ups/{id}/cancel"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/integrations"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/integrations/available"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/integrations/google-calendar/callback"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/integrations/google-calendar/connect"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/integrations/hubspot"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/integrations/microsoft-calendar/callback"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/integrations/microsoft-calendar/connect"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/integrations/{id}"]
+                methods: [DELETE]
+                anonymous: true
+              - paths: ["/api/v1/invitation-links/{id}"]
+                methods: [DELETE]
+                anonymous: true
+              - paths: ["/api/v1/invitations/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/invitations/{id}/renew"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/invitations/{id}/revoke"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/invitations/{id}/send"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/knowledge/{sourceId}"]
+                methods: [DELETE, GET]
+                anonymous: true
+              - paths: ["/api/v1/knowledge/{sourceId}/approve"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/knowledge/{sourceId}/preview"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/knowledge/{sourceId}/reject"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/leads"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/leads/delete"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}"]
+                methods: [DELETE, GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}/follow-ups"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}/profile"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}/score"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}/timeline"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}/whatsapp"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/leads/{id}/whatsapp/{messageId}/cancel"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/manifests/from-site"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/manifests/import"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/organizations"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/organizations/current"]
+                methods: [GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/organizations/current/members"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/plans"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/products"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}"]
+                methods: [DELETE, GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/agents"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/agents/generate"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/agents/suggestions"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/demo-login"]
+                methods: [GET, PUT]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/demos"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/environment"]
+                methods: [GET, PUT]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/environment/validate"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/feedback"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/follow-up-rules"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/generate"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/invitation-links"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/invitation-progress"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/invitation-visitors"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/invitations"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/knowledge"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/knowledge/import-pages"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/knowledge/publish"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/knowledge/search"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/manifest"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/modules"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}"]
+                methods: [DELETE, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}/features"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/modules/{moduleId}/features/{featureId}"]
+                methods: [DELETE, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/personas"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/publish"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/scheduling-links"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/settings/automation"]
+                methods: [GET, PUT]
+                anonymous: true
+              - paths: ["/api/v1/products/{productId}/tools"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/products/{id}/versions"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/questions/inbox"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/questions/resolve"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/scheduling-links/{id}"]
+                methods: [DELETE, GET, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/scheduling-links/{id}/invite"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/scheduling-links/{id}/restore"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/sessions"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/sessions/test"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/control"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/feedback"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/insights"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/messages"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/transcript"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/turns"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/sessions/{id}/watch-token"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/settings/automation"]
+                methods: [GET, PUT]
+                anonymous: true
+              - paths: ["/api/v1/tools/{toolId}"]
+                methods: [PATCH]
+                anonymous: true
+              - paths: ["/api/v1/tools/{toolId}/test"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/webhooks"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/webhooks/deliveries/{deliveryId}/retry"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/webhooks/events"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/webhooks/{id}"]
+                methods: [DELETE, PATCH]
+                anonymous: true
+              - paths: ["/api/v1/webhooks/{id}/deliveries"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/webhooks/{id}/rotate-secret"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/webhooks/{id}/test"]
+                methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/whatsapp/templates"]
+                methods: [GET, POST]
+                anonymous: true
+              - paths: ["/api/v1/whatsapp/templates/refresh"]
+                methods: [POST]
+                anonymous: true
+          - id: demoagent-api-docs
+            access: PUBLIC
+            upstream: lb://demoagent-platform
+            paths: ["/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"]
+
+      demoagent-site:
+        name: Runvance Connect prospect site
+        hosts: [demo.runvance.com, demo.localhost]
+        browser-sign-in: false
+        routes:
+          - id: demoagent-site-web
+            access: PUBLIC
+            upstream: ${DEMOAGENT_WEB_URI:lb://demoagent-web}

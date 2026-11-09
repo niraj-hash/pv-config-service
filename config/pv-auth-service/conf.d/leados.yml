@@ -1,0 +1,73 @@
+# LeadOS's permissions and roles. The keys are the ones LeadOS used in its own org.permissions table
+# (Permission.java), so record-level rules kept in the service (lead.read vs lead.read.all,
+# analytics.team, lead.assign) read the same words from X-PV-Permissions. Roles are LeadOS's four
+# shipped roles (OWNER, ADMIN, MANAGER, MEMBER = "Sales rep"), lower-cased, with the permissions
+# LeadOS gave them by default; the platform SUPERADMIN login is super_admin in the platform org.
+# The gateway's rules for these are in pg-api-gateway/conf.d/leados.yml.
+auth:
+  catalog:
+    leados:
+      name: Runvance CRM
+      origins: [https://crm.runvance.com, https://crm-api.runvance.com, http://leads.localhost:8080]
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: Leads from ads and forms, worked on WhatsApp and email
+        category: Sales & Marketing
+        color: "#c2410c"
+        order: 10
+      # Who invites people and sets their roles (pv-auth-service's team pages, /bff/organization), as before: owners and admins invite people and set roles.
+      manage-members-permission: member.manage
+      self-signup: true
+      # Whoever signs up sets the workspace up, as LeadOS's own sign-up made them OWNER. LeadOS
+      # creates its organization (pending a platform super admin's approval) on their first request.
+      signup-role: owner
+      permissions:
+        lead.read: See leads
+        lead.read.all: See every lead, not just their own
+        lead.write: Create and edit leads
+        lead.assign: Assign and reassign leads
+        lead.delete: Delete leads
+        lead.import: Import leads from a file
+        lead.export: Export leads
+        deal.read: See deals
+        deal.write: Create and edit deals
+        message.send: Send messages to leads
+        campaign.read: See campaigns
+        campaign.write: Create and run campaigns
+        ad.read: See ad accounts and performance
+        ad.write: Create and change ads
+        analytics.read: See analytics and reports
+        analytics.revenue: See revenue figures
+        analytics.team: See other people's performance
+        report.write: Build and share reports
+        automation.read: See automations and scoring rules
+        automation.write: Change automations and scoring rules
+        settings.read: See workspace settings
+        settings.write: Change workspace settings, stages and custom fields
+        member.manage: Arrange teammates into teams and reporting lines
+        billing.manage: See and change billing
+        integration.manage: Connect and disconnect integrations
+      roles:
+        owner:
+          name: Owner
+          description: Everything, including billing. The person who set up the workspace.
+          permissions: ["*"]
+        admin:
+          name: Admin
+          description: "Everything except ownership: settings, users, integrations and billing."
+          permissions: ["*"]
+        manager:
+          name: Manager
+          description: The whole team's leads and deals, reassigning, reports, campaigns and ads.
+          permissions: [lead.read, lead.read.all, lead.write, lead.assign, lead.import, lead.export,
+                        deal.read, deal.write, message.send, campaign.read, campaign.write, ad.read, ad.write,
+                        analytics.read, analytics.revenue, analytics.team, report.write,
+                        automation.read, automation.write, settings.read]
+        member:
+          name: Sales rep
+          description: Their own leads, deals, messages and follow-ups.
+          permissions: [lead.read, lead.write, deal.read, deal.write, message.send, analytics.read]
+        super_admin:
+          name: Platform super admin
+          description: "LeadOS operators: approve workspaces, plans, invoices and payments. Assign in the platform organization only."
+          permissions: ["*"]

@@ -1,0 +1,36 @@
+# Runvance Accelerator (runvance repo, accelerator/; Consul: runvance-accelerator; namespace runvance):
+# Runvance staff's internal ERP tool, reached only through pg-api-gateway (conf.d/runvance.yml).
+# Every environment's settings; an environment's differences in config/runvance-accelerator,<env>/.
+# Its application.yml keeps safe local defaults. Secrets (database and Odoo passwords, the Notify client
+# secret) are Key Vault entries named in its chart (accelerator/deploy/helm/runvance-accelerator).
+runvance:
+  notifications:
+    # One transactional email per new demo request to the sales inbox, through Runvance Notify (was
+    # RUNVANCE_EMAIL_ENABLED / RUNVANCE_NOTIFY_EMAIL with the App Service's own mail settings).
+    email-enabled: true
+    to: info@runvance.com
+  notify:
+    base-url: lb://notification-service
+    token-url: lb://pv-auth-service/oauth2/token
+    # Its pv-auth-service service client: product runvance, scope comm.send only.
+    client-id: runvance-svc
+odoo:
+  # TODO(owner): the Odoo instance the environments use (the App Service's ODOO_URL, which no file
+  # records). Until it is set the ERP endpoints answer "disconnected" (application.yml's localhost).
+  # A profile may point staging at an Odoo.sh staging branch instead.
+  # url: https://<project>.odoo.com
+  database: abc_industrial
+  username: admin
+# Odoo is a third party: instances of its own name that inherit configs.default (config/application).
+# A search of a few hundred partners or products on Odoo.sh can outlast the 10 s default; three 30 s
+# attempts still end within the gateway's 120 s for the runvance-api route. Its retry is the default
+# (logins and reads only; creates and writes are never repeated).
+resilience4j:
+  circuitbreaker:
+    instances:
+      odoo:
+        slow-call-duration-threshold: 30s
+  timelimiter:
+    instances:
+      odoo:
+        timeout-duration: 30s

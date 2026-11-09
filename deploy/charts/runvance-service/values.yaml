@@ -1,0 +1,2 @@
+# A library chart has no values of its own: a service chart's values (and their defaults, in
+# templates/_defaults.tpl) describe the workload. See README.md.

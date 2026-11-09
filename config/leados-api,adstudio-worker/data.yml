@@ -1,0 +1,22 @@
+# The Ad Studio render worker: the leados-api image as a second workload (chart: worker), with
+# SPRING_PROFILES_ACTIVE=<env>,adstudio-worker. Video encodes run here, never on a pod serving
+# requests. It reads leados-api's configuration with leados-api's Consul token, finds ai-service
+# through discovery, and does not register: pg-api-gateway's lb://leados-api must never reach it.
+spring:
+  cloud:
+    consul:
+      discovery:
+        register: false
+  datasource:
+    hikari:
+      # Idle most of the time: let connections go after two minutes, down to one. The ceiling stays at
+      # ten (paths that hold a connection across an outbound call would block a smaller pool).
+      minimum-idle: 1
+      idle-timeout: 120000
+app:
+  ad-studio:
+    worker:
+      enabled: true
+    rendering:
+      provider: LOCAL_FFMPEG
+      max-concurrent-renders: 2

@@ -1,0 +1,9 @@
+# Runvance Accelerator in prod (SPRING_PROFILES_ACTIVE=prod): only what differs from
+# config/runvance-accelerator.
+runvance:
+  notify:
+    # The platform organization's id in this environment's pv-auth-service (alias "platform"): the
+    # demo-request alert is the platform's own message, metered there. Each environment's pv-auth-service
+    # created its own id at its first start. TODO(owner): set it (SELECT id FROM organization WHERE
+    # alias = 'platform'). Blank: sent for no organization, which Notify's runvance product allows.
+    org-id: ""

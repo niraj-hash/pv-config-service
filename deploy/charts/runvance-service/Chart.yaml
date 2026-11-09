@@ -1,0 +1,12 @@
+apiVersion: v2
+name: runvance-service
+description: >
+  The one Helm library every Runvance service chart builds on (platform contract, "Runtime"):
+  Deployment, Service, ServiceAccount with Azure workload identity, Key Vault secrets through
+  External Secrets, Consul configuration and discovery, probes, HPA, PDB, NetworkPolicy, and the
+  edge Ingress (pg-api-gateway only). See README.md.
+type: library
+version: 0.1.0
+keywords: [runvance, spring-boot, consul, aks]
+maintainers:
+  - name: Runvance platform

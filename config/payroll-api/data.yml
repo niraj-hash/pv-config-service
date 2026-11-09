@@ -1,0 +1,27 @@
+# Runvance Payroll (PeopleVizio, repo hr-ai-solution; Consul service payroll-api): settings the same
+# in every environment. An environment's differences: config/payroll-api,<env>/data.yml (staging,
+# prod). Prices: conf.d/pricing.yml. Deployment facts (database and Redis hosts, storage account,
+# workload identity) are the Helm chart's values-<env>.yaml (hr-ai-solution deploy/helm/peoplevizio);
+# secrets are Key Vault's. Safe defaults for local runs stay in the app's application.yml.
+
+# Outbound resilience, Payroll's own targets (docs/platform-contract.md, "Circuit breakers, retries,
+# timeouts"). Every outbound call has an instance named after its target; these inherit
+# config/application's "default" (no base-config: Resilience4j uses "default") and change only what
+# differs. Targets: ai-service, notification-service, pv-auth-service (the shared instances),
+# razorpay (payouts: only those carrying Razorpay's idempotency key are retried), meta-graph (the
+# WhatsApp assistant's replies on a company's own number; never retried), azure-blob-storage
+# (documents and branding; the Azure SDK retries transient errors with this timeout per try),
+# slack-webhook and teams-webhook (tenants' incoming webhooks; never retried).
+resilience4j:
+  circuitbreaker:
+    instances:
+      razorpay:
+        slow-call-duration-threshold: 30s      # payouts: Razorpay may take its time under load
+      azure-blob-storage:
+        slow-call-duration-threshold: 60s      # uploads up to 25 MB
+  timelimiter:
+    instances:
+      razorpay:
+        timeout-duration: 30s
+      azure-blob-storage:
+        timeout-duration: 60s

@@ -1,0 +1,19 @@
+# Runvance Payroll in staging (SPRING_PROFILES_ACTIVE=staging): what differs from a local run. From the
+# retired application-azure.yml and the old Helm templates' environment. The addresses themselves
+# (DB_HOST, DB_POOL_SIZE, AZURE_STORAGE_ACCOUNT) are the chart's values-staging.yaml; secrets Key Vault's.
+spring:
+  datasource:
+    # Azure Database for PostgreSQL Flexible Server requires TLS.
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:peoplevizio}?sslmode=require
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:30}
+      minimum-idle: 5
+      initialization-fail-timeout: 30000
+      connection-timeout: 15000
+hrms:
+  storage:
+    azure:
+      # Blob Storage through the pod's workload identity (Storage Blob Data Contributor on the account).
+      enabled: true
+      use-managed-identity: true
+      require-https: true

@@ -1,0 +1,39 @@
+{{- /* The namespace holds only this job: nothing in, out only DNS and Consul. */ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "consul-config.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: consul-config-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "consul-config.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: consul-config-sync }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.dns.namespace | quote }} }
+          podSelector:
+            matchLabels: {{ toJson .Values.dns.labels }}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: {{ .Values.consul.namespace | quote }} }
+      ports:
+        - { protocol: TCP, port: 8500 }
+        - { protocol: TCP, port: 8501 }

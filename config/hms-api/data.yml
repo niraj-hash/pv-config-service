@@ -1,0 +1,54 @@
+# Runvance Health (hms-api): what every environment runs with (staging and prod answer the same
+# health.runvance.com). Moved here on 2026-11-09 from the retired Container Apps deployment (hms
+# .github/workflows/deploy.yml, infra/azure/main.bicep and parameters.json). Safe local defaults stay
+# in hms application.yml; deployment facts (database, Redis and Kafka addresses) in the hms Helm chart's
+# values-<env>.yaml; secrets in Key Vault (the chart's values.yaml lists their names). Prices:
+# conf.d/pricing.yml.
+app:
+  # The platform admin the user cleanup never deletes (was SUPER_ADMIN_EMAIL in parameters.json).
+  super-admin:
+    email: admin@runvance.com
+  # Health's one SERVICE client in pv-auth-service: scopes ai.invoke (runvance-ai-service) and
+  # comm.send (Runvance Notify). Its secret is SERVICE_CLIENT_SECRET (Key Vault hms-api-service-client-secret).
+  service-client:
+    token-url: lb://pv-auth-service/oauth2/token
+    client-id: hms-svc
+  # Platform services through Consul.
+  ai:
+    base-url: lb://ai-service
+  notify:
+    base-url: lb://notification-service
+
+# Outbound resilience (docs/platform-contract.md): the defaults and the platform services' instances
+# (ai-service, notification-service, pv-auth-service) are config/application's. Health's third parties
+# each get an instance of their own name, inheriting `default` (an instance without base-config uses
+# it): esign, digilocker, abdm, lab-fhir, drug-db (10 s); only those that differ are listed.
+resilience4j:
+  circuitbreaker:
+    instances:
+      azure-blob:
+        slow-call-duration-threshold: 60s        # uploads up to the gateway's 25 MB
+      gst-einvoice:
+        slow-call-duration-threshold: 30s
+      tpa:
+        slow-call-duration-threshold: 30s
+      pacs:
+        slow-call-duration-threshold: 30s
+  retry:
+    instances:
+      # Cosmos DB's request-rate throttling (16500) while seeding a 2000-bed hospital: as many tries as
+      # the seed's former loop, waiting Cosmos's RetryAfterMs when it gives one.
+      cosmos-db:
+        max-attempts: 30
+        wait-duration: 250ms
+        exponential-max-wait-duration: 5s
+  timelimiter:
+    instances:
+      azure-blob:
+        timeout-duration: 60s
+      gst-einvoice:
+        timeout-duration: 30s                    # the IRP behind the GSP is slow at times
+      tpa:
+        timeout-duration: 30s                    # claim submissions
+      pacs:
+        timeout-duration: 30s                    # a large study's WADO-RS metadata

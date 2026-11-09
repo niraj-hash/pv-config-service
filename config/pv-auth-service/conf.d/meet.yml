@@ -1,0 +1,33 @@
+# Runvance Meet (repo ai-demo-agent, meet/: meet-api and meet-web). pg-api-gateway checks these per route
+# (config/pg-api-gateway/conf.d/meet.yml); meet-api has no sign-in or role checks of its own.
+#
+# Each person signs up here and gets an organization of their own (member). Meet then keeps them PENDING until a Meet
+# super admin approves them: that approval is meet-api's own business rule (403 PENDING_APPROVAL until then), not a
+# role. Meet super admins hold super_admin in the platform organization (the gateway's rules say orgs: [platform]).
+# Nobody manages a team in Meet: colleagues sign up and are approved one by one, as before.
+auth:
+  catalog:
+    meet:
+      name: Runvance Meet
+      origins: [https://meetings.runvance.com, http://meet.localhost:8080] # gateway sign-in callbacks
+      # How the suite shows it: the sign-up picker, the launcher at /home, app switchers.
+      app:
+        description: Private video meetings for your team and clients
+        category: Collaboration
+        color: "#0e7490"
+        order: 50
+      self-signup: true          # sign-up creates an organization; meet-api creates the person PENDING on first use
+      signup-role: member
+      permissions:
+        meeting.manage: Plan meetings, invite people to them and host them (each person's own meetings)
+      roles:
+        member:
+          name: Member
+          description: Plans and hosts their own meetings, once a Meet super admin has approved them
+          permissions: [meeting.manage]
+        super_admin:
+          name: Meet super admin
+          # Assign in the platform organization only: approves people, manages the platforms that use Meet and their
+          # API keys, sees every meeting and the activity log.
+          description: Runvance staff
+          permissions: ["*"]

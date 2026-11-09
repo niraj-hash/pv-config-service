@@ -1,0 +1,35 @@
+# pg-api-gateway: settings shared by every product. Each product's hosts, routes and RBAC rules
+# are in conf.d/<product>.yml; scripts/sync.sh joins them into this key's YAML (one document each).
+# Secrets (GATEWAY_CLIENT_SECRET, REDIS_PASSWORD, CONSUL_TOKEN) come from the environment.
+pv:
+  gateway:
+    auth:
+      issuer: https://accounts.runvance.com
+      # Inside the network, through service discovery (Consul): a healthy pv-auth-service instance,
+      # never the public host.
+      jwk-set-uri: lb://pv-auth-service/oauth2/jwks
+      token-uri: lb://pv-auth-service/oauth2/token
+      # Each signed-in product host relays /bff/organization/** here (organization self-administration).
+      service-uri: lb://pv-auth-service
+      client-prefix: gateway-
+    session:
+      cookie-name: PV_SESSION
+      secure-cookie: true
+    limits:
+      max-body-bytes: 10485760 # 10 MB; upload routes raise it
+      max-uri-length: 8192
+    # Every route's inbound circuit breaker (Resilience4j), one per route. A route's own circuit-breaker
+    # block overrides any of these (enabled: false turns it off). It counts only requests that reached
+    # the service: connection errors, timeouts and failure-statuses are failures; the service's own
+    # answer still goes back. Open: 503 UPSTREAM_UNAVAILABLE with Retry-After, nothing sent.
+    circuit-breaker:
+      enabled: true
+      sliding-window: 50          # the last 50 calls
+      minimum-calls: 20           # judged once 20 calls were made
+      failure-rate-threshold: 50  # percent failing → open
+      slow-call-rate-threshold: 80 # percent slow → open
+      slow-call-duration: 30s     # a route with a longer response-timeout-ms (or -1) is judged by its own
+      wait-in-open-state: 30s     # then half-open
+      half-open-calls: 5          # trial calls that decide: closed again, or open
+      failure-statuses: [502, 503, 504]
+      retries: 1                  # GET, HEAD, OPTIONS that got no answer (connection failed); nothing else is retried
