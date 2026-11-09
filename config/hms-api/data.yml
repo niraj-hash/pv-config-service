@@ -18,6 +18,14 @@ app:
     base-url: lb://ai-service
   notify:
     base-url: lb://notification-service
+  # PayU hosted checkout for invoices. PayU posts the signed result back through the payer's browser to
+  # <callback-base-url>/api/v1/payments/payu/callback (an anonymous pg-api-gateway rule; hms-api checks
+  # PayU's reverse hash). Merchant key and salt: Key Vault hms-api-payu-merchant-key and
+  # hms-api-payu-merchant-salt; without them the PayU endpoints answer 503.
+  payu:
+    payment-url: https://test.payu.in/_payment
+    callback-base-url: https://health.runvance.com
+    frontend-return-url: https://health.runvance.com/billing/payment-result
 
 # Outbound resilience (docs/platform-contract.md): the defaults and the platform services' instances
 # (ai-service, notification-service, pv-auth-service) are config/application's. Health's third parties

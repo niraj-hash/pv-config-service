@@ -6,3 +6,7 @@ spring:
       # start-up (as the Container Apps deployment ran it). A new environment's empty database (staging)
       # keeps application.yml's true, so its compound indexes are created.
       auto-index-creation: false
+app:
+  # PayU's live checkout (staging keeps test.payu.in, with test merchant credentials).
+  payu:
+    payment-url: https://secure.payu.in/_payment

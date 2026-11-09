@@ -388,6 +388,15 @@ pv:
               - paths: ["/api/v1/invoices/{invoiceId}/pay-cash"]
                 methods: [POST]
                 roles: [super_admin, clinic_admin, hospital_admin, staff, accountant]
+              # ── /api/v1/payments/payu (PayU hosted checkout for invoices)
+              - paths: ["/api/v1/payments/payu/initiate/{invoiceId}"]
+                methods: [POST]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, accountant, receptionist]
+              # PayU posts the signed result back through the payer's browser (a cross-site form post,
+              # so no session and no X-Requested-With); hms-api verifies PayU's reverse hash.
+              - paths: ["/api/v1/payments/payu/callback"]
+                methods: [POST]
+                anonymous: true
               # ── /api/v1/ipd
               - paths: ["/api/v1/ipd/admissions"]
                 methods: [GET, POST]
@@ -604,6 +613,14 @@ pv:
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
               # ── /api/v1/platform
+              - paths: ["/api/v1/platform/phi/status"]
+                methods: [GET]
+                roles: [super_admin]
+                orgs: [platform]
+              - paths: ["/api/v1/platform/phi/encrypt-existing"]
+                methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
               - paths: ["/api/v1/platform/dashboard/overview"]
                 methods: [GET]
                 roles: [super_admin]
@@ -853,7 +870,10 @@ pv:
               - paths: ["/api/v1/users/{userId}"]
                 methods: [PUT, PATCH, DELETE]
                 roles: [super_admin, clinic_admin]
-            rate-limit: { key: USER, replenish-rate: 20, burst-capacity: 40 }
+            rate-limits:
+              - { key: USER, replenish-rate: 20, burst-capacity: 40 }
+              # The PayU callback is anonymous: limited per address instead.
+              - { key: CLIENT_IP, paths: ["/api/v1/payments/payu/callback"], methods: [POST], replenish-rate: 1, burst-capacity: 10 }
           - id: hms-web
             access: PUBLIC
             upstream: ${HMS_WEB_URI:lb://hms-web}
