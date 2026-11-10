@@ -154,6 +154,9 @@ spec:
           value: pv-config-service deploy/releases/prod/{{ .releaseOf }}.yaml
         - name: Deploy and roll back
           value: pv-config-service docs/deploy-with-argocd.md
+      # A chart from this repository (consul-config) is one source: Argo CD reads a repository at one
+      # revision per Application, and the chart is pinned while the release file is read from main.
+      # The generator has read the release file already, so its image tag is passed directly.
       sources:
         - repoURL: {{ .repoURL | quote }}
           targetRevision: {{ .chartRevision | quote }}
@@ -164,10 +167,16 @@ spec:
             {{- range .valueFiles }}
               - {{ . | quote }}
             {{- end }}
+            {{- if eq .repoURL "git@github.com:niraj-hash/pv-config-service.git" }}
+            valuesObject:
+              image:
+                tag: {{ .image.tag | quote }}
+            {{- else }}
               - {{ printf "$releases/deploy/releases/prod/%s.yaml" .releaseOf | quote }}
         - repoURL: git@github.com:niraj-hash/pv-config-service.git
           targetRevision: main
           ref: releases
+            {{- end }}
       syncPolicy:
         syncOptions:
           - ServerSideApply=true

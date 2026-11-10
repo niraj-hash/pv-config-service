@@ -44,6 +44,8 @@ def parse(path):
         if rest and rest[0] == "IN":
             rest = rest[1:]
         rtype, data = rest[0].upper(), rest[1:]
+        if rtype in ("SOA", "NS"):   # each provider answers its own
+            continue
         fqdn = origin if name == "@" else f"{name}.{origin}"
         if rtype == "TXT":
             value = "".join(data)

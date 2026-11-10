@@ -43,11 +43,13 @@ what Namecheap does. Change no record in either place from step 2 until step 6 h
    az group create -n rg-runvance-dns -l centralindia
    az network dns zone create -g rg-runvance-dns -n runvance.com
    az network dns zone import -g rg-runvance-dns -n runvance.com -f deploy/dns/runvance.com.zone
-   az lock create -n keep-runvance-dns -g rg-runvance-dns --lock-type CanNotDelete
    az network dns zone show -g rg-runvance-dns -n runvance.com --query nameServers -o tsv
    ```
-   The lock keeps the zone (and with it the company's mail) from being deleted along with anything
-   else. The last command prints the four Azure nameservers.
+   The last command prints the four Azure nameservers. No resource lock: a CanNotDelete lock on the
+   group or the zone also forbids deleting record sets (tested), which breaks cert-manager's DNS-01
+   (it deletes its challenge record) and every record removal; the zone's own resource group, which
+   nothing else shares, is the protection. Done on 2026-11-10: the zone exists, nameservers
+   `ns1-03.azure-dns.com`, `ns2-03.azure-dns.net`, `ns3-03.azure-dns.org`, `ns4-03.azure-dns.info`.
 3. **Check Azure before anyone uses it:** `scripts/dns-check.py <the first Azure nameserver>` must
    report every record set ok.
 4. **Switch the nameservers:** Namecheap -> Domain List -> runvance.com -> Nameservers -> Custom DNS ->

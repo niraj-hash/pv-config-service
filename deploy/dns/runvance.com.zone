@@ -1,10 +1,12 @@
 ; runvance.com in Azure DNS (zone runvance.com, resource group rg-runvance-dns): every record the zone
-; holds, as a BIND file for `az network dns zone import`. Azure manages the SOA and the apex NS records,
-; so they are not here. Taken on 2026-11-10 from what Namecheap's DNS answered (docs/dns.md); compare it
-; with Namecheap's own export before the move, and keep it in step with every change made in Azure.
-; Check a nameserver against it: scripts/dns-check.py <nameserver>.
+; holds, as a BIND file for `az network dns zone import`. Taken on 2026-11-10 from what Namecheap's DNS
+; answered (docs/dns.md); compare it with Namecheap's own export before the move, and keep it in step
+; with every change made in Azure. Check a nameserver against it: scripts/dns-check.py <nameserver>.
 $ORIGIN runvance.com.
 $TTL 3600
+
+; The importer wants an SOA first. Azure keeps its own nameserver in it and its own apex NS records.
+@                   IN SOA    ns1-03.azure-dns.com. azuredns-hostmaster.microsoft.com. ( 1 3600 300 2419200 300 )
 
 ; --- The website (Azure Static Web Apps) and its domain verification -------------------------------
 @                   IN A      20.109.151.31
