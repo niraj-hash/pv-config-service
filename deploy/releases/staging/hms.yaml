@@ -2,12 +2,12 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   hms-api  acrinterviewaistaging.azurecr.io/hms-api:(none)
-#   hms-web  acrinterviewaistaging.azurecr.io/hms-web:(none)
+#   hms-api  acrinterviewaistaging.azurecr.io/hms-api:ab2ced3
+#   hms-web  acrinterviewaistaging.azurecr.io/hms-web:ab2ced3
 releaseOf: hms
-# Not released yet: no Application until a release names the chart's commit.
-chartRevision: "unreleased"
+# The commit (or, staging only, branch) of git@github.com:niraj-hash/hms.git whose chart Argo CD renders.
+chartRevision: "ab2ced381dd1f25759ba68490bf9688470336f63"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: ""
+    tag: "ab2ced3"

@@ -2,10 +2,10 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   runvance-accelerator  acrinterviewaistaging.azurecr.io/runvance-accelerator:(none)
+#   runvance-accelerator  acrinterviewaistaging.azurecr.io/runvance-accelerator:05e2fe9
 releaseOf: runvance-accelerator
-# Not released yet: no Application until a release names the chart's commit.
-chartRevision: "unreleased"
+# The commit (or, staging only, branch) of git@github.com:niraj-hash/runvance.git whose chart Argo CD renders.
+chartRevision: "05e2fe9fb600624c01628c022b5991250762626c"
 # Chart values (this file is the chart's last value file): the image tags.
 image:
-  tag: ""
+  tag: "05e2fe9"

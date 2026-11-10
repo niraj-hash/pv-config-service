@@ -525,6 +525,21 @@ def render_check(env, service, element, repo_dir, revision, release_file):
             print(f"render: skipped (cannot read {element['chartPath']} at {tree[:12]})")
             return
         subprocess.run(["tar", "-x", "-C", tmp], input=archive.stdout, check=True)
+        # Links out of the chart (Interview's dashboards and alerts): Argo CD renders from the whole
+        # repository, where they resolve, so their targets come from the same commit too.
+        targets = set()
+        for base, dirs, files in os.walk(os.path.join(tmp, element["chartPath"])):
+            for name in dirs + files:
+                link = os.path.join(base, name)
+                if os.path.islink(link):
+                    rel = os.path.normpath(os.path.join(os.path.dirname(os.path.relpath(link, tmp)), os.readlink(link)))
+                    if not rel.startswith("..") and not os.path.exists(os.path.join(tmp, rel)):
+                        targets.add(rel)
+        if targets:
+            extra = subprocess.run(["git", "-C", repo_dir, "archive", "--format=tar", tree, "--", *sorted(targets)],
+                                   capture_output=True)
+            if extra.returncode == 0:
+                subprocess.run(["tar", "-x", "-C", tmp], input=extra.stdout, check=True)
         chart = os.path.join(tmp, element["chartPath"])
         meta = load_yaml(os.path.join(chart, "Chart.yaml")) or {}
         if any(d.get("name") == "runvance-service" for d in meta.get("dependencies") or []):
