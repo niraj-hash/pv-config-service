@@ -1,0 +1,50 @@
+; runvance.com in Azure DNS (zone runvance.com, resource group rg-runvance-dns): every record the zone
+; holds, as a BIND file for `az network dns zone import`. Azure manages the SOA and the apex NS records,
+; so they are not here. Taken on 2026-11-10 from what Namecheap's DNS answered (docs/dns.md); compare it
+; with Namecheap's own export before the move, and keep it in step with every change made in Azure.
+; Check a nameserver against it: scripts/dns-check.py <nameserver>.
+$ORIGIN runvance.com.
+$TTL 3600
+
+; --- The website (Azure Static Web Apps) and its domain verification -------------------------------
+@                   IN A      20.109.151.31
+www                 IN CNAME  gentle-field-02012a900.7.azurestaticapps.net.
+asuid               IN TXT    "_ierl4lwdlrtfonhvpbsnf89dy5aw6pb"
+asuid.www           IN TXT    "_7bk05ddy8psxc25gkdf2gp49j7tduv6"
+
+; --- Mail: Google Workspace --------------------------------------------------------------------------
+@                   IN MX 1   aspmx.l.google.com.
+@                   IN MX 5   alt1.aspmx.l.google.com.
+@                   IN MX 5   alt2.aspmx.l.google.com.
+@                   IN MX 10  aspmx2.googlemail.com.
+@                   IN MX 10  aspmx3.googlemail.com.
+@                   IN TXT    "v=spf1 include:_spf.google.com ~all"
+google._domainkey   IN TXT    "v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvb4kmq3QPDe7DQhFPKWsOMCq7T64GJOdK+cEYRXgqUsIh89pvMz4ebCC+d3GiPOdAepMkHUbPK74yfpZxu89Pd+6PRxrltNJaCIOUbHbKq/Lj/d2MzsiHaXrKssRC0CeDBN1s1tpFMeazl3go5pf60LtAMopxPj2Ao7xXBVI9AirCdFN2OAfpIisdUgCAPNGuhf" "8WsuyDZ0MZ6WkhKNqnXM7U6f3nouyAUFFv0JXUXlRLlVlwcDn2DZra14VU10OXmuHm8/i1SFKJuyYsV/CwUN6cBVBOiB8+l9ovsrJhxDBAck/cIh7qdMSob2vzTVtAt0XUIB/qhDZBcSs6fER/QIDAQAB"
+_dmarc              IN TXT    "v=DMARC1; p=none; rua=mailto:info@runvance.com; fo=1"
+
+; --- Domain ownership checks (Google Search Console and one unidentified token: keep it) -------------
+@                   IN TXT    "google-site-verification=IdEXRoCpip2_zlYG4BKkKE2KYFbBY9EuTKoUwWeKb2M"
+@                   IN TXT    "google-site-verification=YiJcmR6tpLIxtfOT7CmOhndBKUxT-EoSwcFudlGOo9M"
+@                   IN TXT    "_p99vdgnbmbnmbg0woj9ey55lcgzcrhg"
+
+; --- The staging cluster's ingress (AKS app-routing, aks-interviewai-staging) ------------------------
+; The wildcard covers every product host of one label without its own record (accounts, crm, crm-api,
+; health, connect-api, demo, notify, notify-api, meet-api, accelerator); pg-api-gateway answers them.
+; api.interview is two labels deep, so it needs its own record.
+*                   IN A      20.219.214.38
+payroll             IN A      20.219.214.38
+interview           IN A      20.219.214.38
+api.interview       IN A      20.219.214.38
+argocd              IN A      20.219.214.38
+
+; --- Still on Azure Container Apps until their cutover (docs/dns.md): 5-minute TTL so the switch is quick.
+; At cutover delete the CNAME (the wildcard then answers) and its asuid record.
+connect       300   IN CNAME  demoagent-admin.delightfulsky-9f9ecaae.centralindia.azurecontainerapps.io.
+assessment    300   IN CNAME  demoagent-assessment.delightfulsky-9f9ecaae.centralindia.azurecontainerapps.io.
+meetings      300   IN CNAME  runvance-meet-web.delightfulsky-9f9ecaae.centralindia.azurecontainerapps.io.
+asuid.connect       IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
+asuid.assessment    IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
+asuid.meetings      IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
+
+; --- Unidentified: answers today, not in any configuration here (an older Meet deployment?) ----------
+meet                IN A      20.219.8.76

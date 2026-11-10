@@ -1,0 +1,31 @@
+# The DNS-01 issuer for *.runvance.com: pg-api-gateway's wildcard Certificate (issuer letsencrypt-dns01).
+# cert-manager proves the domain by writing an _acme-challenge TXT record into the Azure DNS zone
+# runvance.com (rg-runvance-dns), signed in through Azure workload identity as id-cert-manager-dns-<env>,
+# whose role allows TXT records in that zone and nothing else. Single hosts (accounts, api.interview)
+# keep the cluster's HTTP-01 issuer, letsencrypt-prod.
+#
+# Applied by hand once per cluster, like cert-manager itself; the setup and the values to fill in are in
+# docs/dns.md, "Certificates":
+#   sed -e "s/REPLACE-WITH-SUBSCRIPTION-ID/$SUB/" -e "s/REPLACE-WITH-CLIENT-ID/$CLIENT_ID/" \
+#       -e "s/REPLACE-WITH-ACME-EMAIL/$ACME_EMAIL/" deploy/cert-manager/letsencrypt-dns01.yaml | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns01
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: REPLACE-WITH-ACME-EMAIL            # the same mailbox as letsencrypt-prod: expiry warnings
+    privateKeySecretRef:
+      name: letsencrypt-dns01-account-key
+    solvers:
+      - dns01:
+          azureDNS:
+            subscriptionID: REPLACE-WITH-SUBSCRIPTION-ID
+            resourceGroupName: rg-runvance-dns
+            hostedZoneName: runvance.com
+            environment: AzurePublicCloud
+            managedIdentity:
+              clientID: REPLACE-WITH-CLIENT-ID   # id-cert-manager-dns-<env>, this cluster's own
+        selector:
+          dnsZones: ["runvance.com"]

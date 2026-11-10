@@ -155,7 +155,8 @@ are cert-manager `Certificate`s: the wildcard through a DNS-01 ClusterIssuer (`l
 with write access to the `runvance.com` Azure DNS zone), single hosts through HTTP-01
 (`letsencrypt-prod`). DNS: `*.runvance.com`, `accounts.runvance.com` and `api.interview.runvance.com`
 point at the app-routing load balancer of the environment that owns the hosts; `www` and the apex
-keep their own records.
+keep their own records. The zone, every record, the move from Namecheap and the DNS-01 issuer:
+[dns.md](dns.md).
 
 ## Add a service
 
