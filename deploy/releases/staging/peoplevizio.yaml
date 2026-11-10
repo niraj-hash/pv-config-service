@@ -2,12 +2,12 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   hrms-api  acrinterviewaistaging.azurecr.io/hrms-api:fb39578
-#   hrms-web  acrinterviewaistaging.azurecr.io/hrms-web:fb39578
+#   hrms-api  acrinterviewaistaging.azurecr.io/hrms-api:566c7a4
+#   hrms-web  acrinterviewaistaging.azurecr.io/hrms-web:566c7a4
 releaseOf: peoplevizio
 # The commit (or, staging only, branch) of git@github.com:heimdal01/hr-ai-solution.git whose chart Argo CD renders.
-chartRevision: "fb395782f0e23cb78de186c2df2eabe329232fd4"
+chartRevision: "566c7a4bd10358673bebac4963d69f8f89c8d0ed"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: "fb39578"
+    tag: "566c7a4"
