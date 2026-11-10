@@ -1,0 +1,5 @@
+# pv-auth-service in prod: nothing differs from config/pv-auth-service/ yet; put prod-only settings here.
+# The context must exist: Spring Cloud Consul (fail-fast, `consul:` import) refuses to start when the
+# active profile's context is missing ("config/pv-auth-service,staging/ ... does not exist", 2026-11-10).
+runvance:
+  environment: prod
