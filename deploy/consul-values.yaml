@@ -2,6 +2,7 @@
 # discovery for every PayVizio service.
 #   helm repo add hashicorp https://helm.releases.hashicorp.com
 #   helm upgrade --install consul hashicorp/consul -n consul --create-namespace -f deploy/consul-values.yaml
+# Staging layers deploy/consul-values-staging.yaml on top (one server, HTTP inside the cluster).
 global:
   name: consul
   datacenter: pv-dc1

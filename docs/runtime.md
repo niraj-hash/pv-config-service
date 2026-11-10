@@ -104,10 +104,15 @@ How a service gets its Consul token, once per environment:
 1. Add its `spring.application.name` to `consul/services.txt`.
 2. With a management token (consul-k8s keeps the bootstrap token in the `consul` namespace's
    `consul-bootstrap-acl-token` Secret) and `CONSUL_HTTP_ADDR` pointing at the cluster's Consul (e.g.
-   through `kubectl -n consul port-forward svc/consul-server`): `scripts/bootstrap-acl.sh --tokens`. It
-   creates the service's least-privilege policy and token in `secrets/<service>.token`.
-3. `az keyvault secret set --vault-name <vault> -n <service>-consul-token --file secrets/<service>.token`,
-   then delete the local file.
+   through `kubectl -n consul port-forward svc/consul-server`):
+   `CONSUL_SECRETS_DIR=<an empty directory> scripts/bootstrap-acl.sh --tokens`. It creates the
+   service's least-privilege policy and token in `<that directory>/<service>.token`. Without
+   `CONSUL_SECRETS_DIR` it uses `secrets/`, where the local Consul's tokens already are: the script
+   keeps a token whose file exists, so the cluster would get none of its own. A file lost before
+   step 3 is read back from Consul on the next run (no second token).
+3. `az keyvault secret set --vault-name <vault> -n <service>-consul-token --file <that directory>/<service>.token`,
+   then delete the local file once Key Vault lists it. One exception: Payroll's chart reads
+   `peoplevizio-consul-token` (its `secrets.consulToken`) for the `payroll-api` token.
 4. The chart's ExternalSecret (`<service>-secrets`) picks it up within its refresh interval (1 h, or
    annotate the ExternalSecret `force-sync=<timestamp>`); a running pod reads secrets at start only, so
    `kubectl rollout restart` after a rotation.

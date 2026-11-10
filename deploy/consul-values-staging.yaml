@@ -1,0 +1,33 @@
+# Staging Consul on the lean AKS cluster, layered on the production values (deploy/consul-values.yaml):
+#   helm repo add hashicorp https://helm.releases.hashicorp.com && helm repo update
+#   helm search repo hashicorp/consul        # the newest chart version; pin it with --version
+#   helm upgrade --install consul hashicorp/consul -n consul --create-namespace --version <chart version> \
+#     -f deploy/consul-values.yaml -f deploy/consul-values-staging.yaml
+# Consul is installed by hand, outside Argo CD, like External Secrets and cert-manager. Then the ACL
+# tokens, made against this Consul (docs/runtime.md, "How a service gets its Consul token").
+#
+# What differs from production, and why:
+
+global:
+  tls:
+    # The charts call Consul over plain HTTP on 8500 (runvance-service `consul.scheme: http`, and the
+    # consul-config job). TLS stays on between Consul's own agents; HTTP is served inside the cluster
+    # too. The consul-server Service is ClusterIP: nothing outside the cluster reaches it.
+    httpsOnly: false
+
+server:
+  # One server. Lean staging: the cost is that Consul is unavailable while its pod restarts or moves
+  # (a node upgrade). During that time new pods fail to start (`configImport: consul:`) and the gateway
+  # cannot look services up (lb://); pods already running keep their configuration. With three nodes,
+  # `replicas: 3` and `bootstrapExpect: 3` (production's values) also fit, one server per node.
+  replicas: 1
+  bootstrapExpect: 1
+  # With one server a disruption budget would forbid evicting it, and a node drain (an AKS upgrade)
+  # would wait on it until it times out.
+  disruptionBudget:
+    enabled: false
+
+client:
+  # No per-node agents: every service talks to consul-server directly (runvance-service `consul.host`),
+  # and catalog sync talks to the servers.
+  enabled: false
