@@ -1,0 +1,33 @@
+# The platform Redis (namespace runvance-platform, Deployment and Service `redis`) still comes from the
+# superseded runvance-platform Helm chart, whose own NetworkPolicy `redis` admits only that chart's old
+# gateway and the peoplevizio namespace. NetworkPolicies add up, so this one admits the new platform's
+# callers as well, without touching the old chart's object:
+#   pg-api-gateway  sessions and rate limits
+#   ai-service      its cache and limits
+#   hms-api         Runvance Health's cache (Health uses the platform Redis, owner's decision 2026-11-11)
+# Payroll (peoplevizio namespace) is admitted by the old policy already.
+#
+# Applied by hand, like the platform's other shared pieces outside Argo CD (Consul, External Secrets,
+# cert-manager):
+#   kubectl apply -f deploy/platform-redis/callers-networkpolicy.yaml
+# A caller's own chart must also allow the egress (networkPolicy.egress.services: runvance-platform, app: redis,
+# port 6379). Retire this file when Redis moves out of the old chart.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-runvance-callers
+  namespace: runvance-platform
+spec:
+  podSelector:
+    matchLabels: { app: redis }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: pg-api-gateway } }
+          podSelector: { matchLabels: { app: pg-api-gateway } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: runvance-ai } }
+          podSelector: { matchLabels: { app: ai-service } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: hms } }
+          podSelector: { matchLabels: { app: hms-api } }
+      ports:
+        - { protocol: TCP, port: 6379 }

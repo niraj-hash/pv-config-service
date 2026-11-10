@@ -6,7 +6,7 @@
 #   hms-web  acrinterviewaistaging.azurecr.io/hms-web:ab2ced3
 releaseOf: hms
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/hms.git whose chart Argo CD renders.
-chartRevision: "ab2ced381dd1f25759ba68490bf9688470336f63"
+chartRevision: "0125e763a3ed9e11a17d62917f54ae83fa8700ff"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:

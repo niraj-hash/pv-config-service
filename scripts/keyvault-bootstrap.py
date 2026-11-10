@@ -193,7 +193,13 @@ def main():
             if kind == "yours" and a.prompt:
                 hint = note + ("; " + PROVIDER_NOTE if name.startswith("ai-service-") and name.endswith("-key") and "credentials" not in name else "")
                 print(f"  {name}: {hint}")
-                value = getpass.getpass("    value (hidden; Enter to skip): ").strip()
+                # Hidden input keeps what a stray Escape or arrow key types (\x1b...): drop control
+                # characters, which no secret here contains.
+                value = "".join(c for c in getpass.getpass("    value (hidden; Enter to skip): ") if c.isprintable()).strip()
+                if "mongodb" in name and value and not value.startswith(("mongodb://", "mongodb+srv://")):
+                    print(f"  SKIPPED    {name}: a MongoDB connection string starts with mongodb:// or mongodb+srv://")
+                    missing.append(name)
+                    continue
                 if value:
                     try:
                         vault.put(name, value)
