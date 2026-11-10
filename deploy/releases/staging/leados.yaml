@@ -6,7 +6,7 @@
 #   leados-web  acrinterviewaistaging.azurecr.io/leados-web:617288d
 releaseOf: leados
 # The commit (or, staging only, branch) of git@github.com:Payvizio-Technologies/PayVizio-LeadOS.git whose chart Argo CD renders.
-chartRevision: "617288da36047ea3542efc5e28fbe0c809cd5d79"
+chartRevision: "f1709764268e0142f9216429320cb2606117442f"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
