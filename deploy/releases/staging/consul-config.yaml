@@ -2,10 +2,10 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   pv-config-sync  acrinterviewaistaging.azurecr.io/pv-config-sync:(none)
+#   pv-config-sync  acrinterviewaistaging.azurecr.io/pv-config-sync:ef53bd8
 releaseOf: consul-config
-# Not released yet: no Application until a release names the chart's commit.
-chartRevision: "unreleased"
+# The commit (or, staging only, branch) of git@github.com:niraj-hash/pv-config-service.git whose chart Argo CD renders.
+chartRevision: "ef53bd867827466586eedad6c618c13e3276f37c"
 # Chart values (this file is the chart's last value file): the image tags.
 image:
-  tag: ""
+  tag: "ef53bd8"
