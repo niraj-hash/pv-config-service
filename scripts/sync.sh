@@ -49,7 +49,8 @@ for dir in "$ROOT"/config/*/; do
   if [ "$DRY_RUN" = true ]; then
     echo "would write config/$context/data (${#files[@]} files, ${#body} bytes)"
   else
-    consul PUT "config/$context/data" --data-binary "$body" >/dev/null
+    # Through stdin: a large context (pg-api-gateway's) exceeds the 128 KB limit on one argument.
+    printf '%s' "$body" | consul PUT "config/$context/data" --data-binary @- >/dev/null
     echo "wrote config/$context/data (${#files[@]} files)"
   fi
 done
