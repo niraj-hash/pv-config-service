@@ -12,7 +12,9 @@
 # CONSUL_SECRETS_DIR at an empty directory: otherwise the local Consul's tokens are kept and the
 # cluster rejects them. A missing file is filled from the token Consul already has for that name
 # (same description and policy), so running it again after losing the files makes no second token. Hand each service its own token as CONSUL_TOKEN (a Kubernetes Secret /
-# Key Vault entry), never through Consul KV.
+# Key Vault entry), never through Consul KV. The files hold the token without a trailing newline: a
+# newline stored in Key Vault (az ... --file keeps it) ends the X-Consul-Token header early, and Consul
+# then stores every write as an empty value while answering true.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -32,7 +34,7 @@ umask 077
 
 if [ "$INIT" = true ]; then
   if [ ! -s "$SECRETS/management.token" ]; then
-    curl --fail -sS -X PUT "$ADDR/v1/acl/bootstrap" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SecretID"])' > "$SECRETS/management.token"
+    curl --fail -sS -X PUT "$ADDR/v1/acl/bootstrap" | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin)["SecretID"])' > "$SECRETS/management.token"
     echo "bootstrapped ACLs; management token in secrets/management.token"
   fi
   CONSUL_HTTP_TOKEN=$(cat "$SECRETS/management.token")
@@ -67,12 +69,12 @@ mine = [t for t in json.load(sys.stdin) if t.get("Description") == sys.argv[1]
 mine.sort(key=lambda t: t.get("CreateTime", ""))
 print(mine[-1]["AccessorID"] if mine else "")' "$name")
   if [ -n "$accessor" ]; then
-    api GET "acl/token/$accessor" | python3 -c 'import json,sys; print(json.load(sys.stdin)["SecretID"])' > "$SECRETS/$name.token"
+    api GET "acl/token/$accessor" | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin)["SecretID"])' > "$SECRETS/$name.token"
     echo "read back the existing token for $name ($SECRETS/$name.token)"
     return 0
   fi
   api PUT "acl/token" "{\"Description\":\"$name\",\"Policies\":[{\"Name\":\"$name\"}]}" \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin)["SecretID"])' > "$SECRETS/$name.token"
+    | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin)["SecretID"])' > "$SECRETS/$name.token"
   echo "created token for $name ($SECRETS/$name.token)"
 }
 
