@@ -40,13 +40,12 @@ api.interview       IN A      20.219.214.38
 argocd              IN A      20.219.214.38
 
 ; --- Still on Azure Container Apps until their cutover (docs/dns.md): 5-minute TTL so the switch is quick.
-; At cutover delete the CNAME (the wildcard then answers) and its asuid record.
+; At cutover delete the CNAME (the wildcard then answers) and its asuid record. Meet moved on 2026-11-11.
 connect       300   IN CNAME  demoagent-admin.delightfulsky-9f9ecaae.centralindia.azurecontainerapps.io.
 assessment    300   IN CNAME  demoagent-assessment.delightfulsky-9f9ecaae.centralindia.azurecontainerapps.io.
-meetings      300   IN CNAME  runvance-meet-web.delightfulsky-9f9ecaae.centralindia.azurecontainerapps.io.
 asuid.connect       IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
 asuid.assessment    IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
-asuid.meetings      IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
 
-; --- Unidentified: answers today, not in any configuration here (an older Meet deployment?) ----------
+; --- The Jitsi VM Meet and Connect use (config/meet-api jitsi.domain; token-only, JWT_APP_SECRET in Key Vault
+;     runvance-jitsi-jwt-secret). Not behind the gateway: browsers talk to Jitsi directly. ---------------
 meet                IN A      20.219.8.76
