@@ -36,6 +36,12 @@ app:
       enabled: false
   meta:
     oauth:
+      # The platform's Meta app ("Runvance CRM", developers.facebook.com) and its Facebook Login for
+      # Business configuration. Not secrets: both appear in the browser's OAuth URL. Without either,
+      # Settings -> Meta shows "Facebook connection isn't available". The app secret is
+      # META_CLIENT_SECRET from Key Vault (leados-api-meta-client-secret).
+      client-id: "1076688994869695"
+      config-id: "1395332159242656"
       redirect-uri: https://crm-api.runvance.com/api/v1/meta/oauth/callback
     webhook:
       callback-url: https://crm-api.runvance.com/api/v1/meta/webhooks/leadgen
