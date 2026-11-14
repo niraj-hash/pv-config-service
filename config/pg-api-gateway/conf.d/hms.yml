@@ -556,19 +556,24 @@ pv:
               # ── /api/v1/patients
               - paths: ["/api/v1/patients"]
                 methods: [GET] # any signed-in member
+              # The front desk registers and updates patients (phone, allergies, contacts); only admins delete.
+              # A patient calling the reads gets only their own record (the API scopes it).
               - paths: ["/api/v1/patients"]
                 methods: [POST]
-                roles: [super_admin, clinic_admin, staff]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist]
               - paths: ["/api/v1/patients/me"]
                 methods: [GET] # any signed-in member
               - paths: ["/api/v1/patients/register"]
                 methods: [POST]
-                roles: [super_admin, clinic_admin, staff]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist]
               - paths: ["/api/v1/patients/{patientId}"]
                 methods: [GET] # any signed-in member
               - paths: ["/api/v1/patients/{patientId}"]
-                methods: [PUT, PATCH, DELETE]
-                roles: [super_admin, clinic_admin, staff]
+                methods: [PUT, PATCH]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist, doctor] # patient.update
+              - paths: ["/api/v1/patients/{patientId}"]
+                methods: [DELETE]
+                roles: [super_admin, clinic_admin, hospital_admin]
               - paths: ["/api/v1/patients/{patientId}/allergies"]
                 methods: [GET] # any signed-in member
               - paths: ["/api/v1/patients/{patientId}/allergies"]
@@ -588,6 +593,9 @@ pv:
               - paths: ["/api/v1/pharmacy/alerts/expiring-soon"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/pharmacy/allergy-check"]
+                methods: [GET]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, doctor, nurse, pharmacist]
               - paths: ["/api/v1/pharmacy/alerts/low-stock"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
@@ -767,13 +775,10 @@ pv:
               - paths: ["/api/v1/push/tokens"]
                 methods: [POST, DELETE]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
-              # ── /api/v1/queue
+              # ── /api/v1/queue (the front desk's day: names and phone numbers, so staff only)
               - paths: ["/api/v1/queue"]
-                methods: [GET] # any signed-in member
-              - paths: ["/api/v1/queue/token"]
-                methods: [POST] # any signed-in member
-              - paths: ["/api/v1/queue/{doctorId}"]
-                methods: [GET] # any signed-in member
+                methods: [GET]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist, doctor, nurse]
               # ── /api/v1/reports
               - paths: ["/api/v1/reports/attendance"]
                 methods: [GET]
