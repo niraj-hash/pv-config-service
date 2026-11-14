@@ -62,9 +62,10 @@ ENTRIES = [
     ("peoplevizio-service-client-secret", "generated", "token", False, "Payroll: its service client; register it in pv-auth-service"),
     # --- Health ---
     ("hms-api-mongodb-url", "yours", None, True, "Health: its MongoDB connection string"),
-    ("hms-api-phi-encryption-key", "generated", "key32", True, "Health: PHI_ENCRYPTION_KEY (never rotate)"),
+    ("hms-api-phi-encryption-key", "generated", "key32", True, "Health: PHI_ENCRYPTION_KEY (rotate only by hms docs/runbooks/phi-key-rotation.md)"),
     ("hms-api-redis-password", "yours", None, True, "Health: the access key of its Azure Cache for Redis (hms-staging-redis, not created yet)"),
     ("hms-api-service-client-secret", "generated", "token", False, "Health: its service client; register it in pv-auth-service"),
+    ("hms-api-meet-api-key", "yours", None, False, "Health: its platform key from Runvance Meet's superadmin console (video consultations)"),
     # --- Connect ---
     ("demoagent-platform-db-password", "generated", "password", True, "Connect: role of the demoagent database"),
     ("demoagent-platform-encryption-key", "generated", "key32", True, "Connect: PLATFORM_ENCRYPTION_KEY (exactly 32 bytes)"),

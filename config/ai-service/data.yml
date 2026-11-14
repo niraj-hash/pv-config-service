@@ -450,6 +450,25 @@ ai:
       candidates: [anthropic:claude-sonnet-5-5, anthropic:claude-opus-5-5]
       prompt: health.daily-brief
       params: { max-output-tokens: 1500, reasoning: { effort: low } }
+    health.scribe-transcribe:
+      description: >-
+        The AI scribe: a consultation recorded with the patient's consent, sent as pieces under 60 seconds
+        (16 kHz WAV); text comes back, no audio is kept
+      products: [hms]
+      capability: transcription
+      # Azure Speech in Central India, the platform's own cloud. No other speech company until the
+      # owner approves one as a processor of patient audio (Health decision D12).
+      candidates: [azure-speech:short-audio]
+      params: { language: hi-IN }
+      max-audio-bytes: 4194304
+      timeout-ms: 30000
+    health.scribe:
+      description: A consultation note drafted from the scribe's transcript, for the doctor to review (prompt held here)
+      products: [hms]
+      candidates: [anthropic:claude-sonnet-5-5, anthropic:claude-opus-5-5]
+      prompt: health.scribe
+      params: { max-output-tokens: 3000, reasoning: { effort: low } }
+      timeout-ms: 90000
 
     # ------------------------------------------------------------ Runvance Interview (interview)
     # Its task classes, with its default routes (backend application.yml app.ai.default-routes).
@@ -591,6 +610,66 @@ ai:
                     properties: { patient_id: { type: string }, prep_note: { type: string } }
                     required: [patient_id, prep_note]
               required: [summary, highlights, prep_notes]
+    health.scribe:
+      active: 1
+      versions:
+        1:
+          notes: New (2026-11-14) for the Health AI scribe (competitive review C6)
+          system: >-
+            You are a clinical scribe for a doctor in India. You get the transcript of one outpatient
+            consultation, recorded with the patient's consent. The talk may mix Hindi, English and
+            other Indian languages, and the transcript may have recognition errors. Write the doctor's
+            note in English. Use only what was said: never add findings, doses or diagnoses that were
+            not stated, and leave a field empty when the conversation does not cover it. Medicines are
+            the ones the doctor said they are prescribing, with dose, frequency and duration only as
+            said. For each diagnosis give an ICD-10 code (WHO) only when you are sure of it. List in
+            uncertain anything you could not make out or that the doctor should check. The note is a
+            draft: the doctor reviews and signs it.
+          user: |
+            Language of the consultation: {{language}}
+            Patient: {{patient}}
+            Transcript:
+            {{transcript}}
+          variables:
+            language: { description: "the recording's language, such as hi-IN or en-IN" }
+            patient: { untrusted: true, description: "age, sex, known allergies and current medicines" }
+            transcript: { untrusted: true, description: "the consultation as transcribed, in order" }
+          response-format:
+            type: json_schema
+            name: scribe_note
+            schema:
+              type: object
+              properties:
+                chief_complaint: { type: string }
+                history: { type: string, description: history of the present illness, as told }
+                examination: { type: string, description: findings the doctor said aloud }
+                assessment: { type: string }
+                diagnoses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      display: { type: string }
+                      icd10: { type: string, description: "WHO ICD-10 code such as J06.9, or empty" }
+                      certainty: { type: string, enum: [confirmed, provisional] }
+                    required: [display]
+                medicines:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      dose: { type: string }
+                      frequency: { type: string }
+                      duration: { type: string }
+                      route: { type: string }
+                      instructions: { type: string }
+                    required: [name]
+                investigations: { type: array, items: { type: string } }
+                advice: { type: string, description: what the patient was told to do, in English }
+                follow_up_days: { type: integer }
+                uncertain: { type: array, items: { type: string } }
+              required: [chief_complaint, diagnoses, medicines, investigations, uncertain]
     accelerator.erp-query:
       active: 1
       versions:
