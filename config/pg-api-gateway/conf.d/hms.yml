@@ -21,7 +21,13 @@ pv:
               # ping, inquiries; e-Sign webhook (ESIGN_WEBHOOK_SECRET checked by the service)
               - paths: ["/api/v1/public/**"]
                 anonymous: true
-            rate-limit: { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 10, requested-tokens: 6, paths: ["/api/v1/public/inquiries"], methods: [POST] }
+            rate-limits:
+              - { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 10, requested-tokens: 6, paths: ["/api/v1/public/inquiries"], methods: [POST] }
+              # Online booking, payment links and feedback forms are anonymous: a few per address.
+              - { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 10, requested-tokens: 3, paths: ["/api/v1/public/clinics/*/booking-requests", "/api/v1/public/pay/*/payu", "/api/v1/public/feedback/*"], methods: [POST] }
+              - { key: CLIENT_IP, replenish-rate: 5, burst-capacity: 60, paths: ["/api/v1/public/clinics/**", "/api/v1/public/pay/**", "/api/v1/public/feedback/**"], methods: [GET] }
+              # The status page polls every minute; cached for 30 s by the API.
+              - { key: CLIENT_IP, replenish-rate: 2, burst-capacity: 20, paths: ["/api/v1/public/status"], methods: [GET] }
           - id: hms-api
             upstream: lb://hms-api
             paths: ["/api/**"]
@@ -46,6 +52,21 @@ pv:
               - paths: ["/api/v1/abdm/status"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/abdm/care-contexts/{patientId}"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/abdm/share-tokens"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              - paths: ["/api/v1/abdm/share-tokens/{id}/complete"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              - paths: ["/api/v1/abdm/hiu/consent/{patientId}"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
+              - paths: ["/api/v1/abdm/hiu/records/{patientId}"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse]
               # ── /api/v1/appointments
               - paths: ["/api/v1/appointments"]
                 methods: [GET] # any signed-in member
@@ -70,6 +91,85 @@ pv:
               - paths: ["/api/v1/audit-logs"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              # ── /api/v1/billing (one billing area for OPD and IPD; refunds, credit notes, discounts and
+              #    cancelling also need billing.approve, which the API checks)
+              - paths: ["/api/v1/billing/bills", "/api/v1/billing/bills/{id}", "/api/v1/billing/summary"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist, accountant]
+              - paths: ["/api/v1/billing/bills", "/api/v1/billing/appointments/{appointmentId}/bill",
+                        "/api/v1/billing/bills/{id}/items", "/api/v1/billing/bills/{id}/finalize",
+                        "/api/v1/billing/bills/{id}/payments"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist, accountant]
+              - paths: ["/api/v1/billing/bills/{id}/items/{lineId}"]
+                methods: [DELETE]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist, accountant]
+              - paths: ["/api/v1/billing/bills/{id}/payer"]
+                methods: [PUT]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist, accountant]
+              - paths: ["/api/v1/billing/bills/{id}/discount"]
+                methods: [PUT]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, accountant]
+              - paths: ["/api/v1/billing/bills/{id}/refunds", "/api/v1/billing/bills/{id}/credit-notes", "/api/v1/billing/bills/{id}/cancel"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, accountant]
+              # ── Hospital departments: /api/v1/blood-bank, /api/v1/cssd, /api/v1/diet, /api/v1/mrd
+              - paths: ["/api/v1/blood-bank/stock", "/api/v1/blood-bank/units", "/api/v1/blood-bank/requests"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, lab_technician]
+              - paths: ["/api/v1/blood-bank/requests"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse]
+              - paths: ["/api/v1/blood-bank/units", "/api/v1/blood-bank/units/{id}/screening", "/api/v1/blood-bank/units/{id}/discard",
+                        "/api/v1/blood-bank/donors", "/api/v1/blood-bank/donors/{id}/donations", "/api/v1/blood-bank/requests/{id}/issue"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, lab_technician]
+              - paths: ["/api/v1/cssd/sets", "/api/v1/cssd/cycles/{id}/trace"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, nurse, inventory_manager, doctor]
+              - paths: ["/api/v1/cssd/sets", "/api/v1/cssd/sets/{id}/clean", "/api/v1/cssd/sets/{id}/issue", "/api/v1/cssd/sets/{id}/return", "/api/v1/cssd/cycles"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, nurse, inventory_manager]
+              - paths: ["/api/v1/diet/kitchen"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, nurse, doctor]
+              - paths: ["/api/v1/diet/admissions/{admissionId}"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, nurse, doctor]
+              - paths: ["/api/v1/mrd/monthly", "/api/v1/mrd/files/out"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              - paths: ["/api/v1/mrd/files/{patientId}/issue", "/api/v1/mrd/files/movements/{id}/return"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              # ── /api/v1/booking-requests (online booking: the front desk confirms or declines)
+              - paths: ["/api/v1/booking-requests"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              - paths: ["/api/v1/booking-requests/{id}/confirm", "/api/v1/booking-requests/{id}/decline"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              # ── /api/v1/chain (branches of one owner; head-office-only actions are checked by the API)
+              - paths: ["/api/v1/chain", "/api/v1/chain/referrals", "/api/v1/chain/patients/{patientId}/other-branches"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist]
+              - paths: ["/api/v1/chain/dashboard"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/chain", "/api/v1/chain/join-code", "/api/v1/chain/join", "/api/v1/chain/masters/push"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/chain/referrals", "/api/v1/chain/referrals/{id}/accept"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist]
+              # ── /api/v1/claims (cashless claim cases: pre-auth, enhancement, discharge, final, settlement)
+              - paths: ["/api/v1/claims", "/api/v1/claims/ageing", "/api/v1/claims/denials", "/api/v1/claims/{id}"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, accountant, receptionist]
+              - paths: ["/api/v1/claims/from-bill/{billId}", "/api/v1/claims/{id}/submit", "/api/v1/claims/{id}/response",
+                        "/api/v1/claims/{id}/query-answer", "/api/v1/claims/{id}/settle", "/api/v1/claims/{id}/documents"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, accountant]
               # ── /api/v1/clinics
               - paths: ["/api/v1/clinics"]
                 methods: [GET, POST]
@@ -86,6 +186,29 @@ pv:
                 orgs: [platform]
               - paths: ["/api/v1/clinics/{clinicId}/rooms"]
                 methods: [GET] # any signed-in member
+              # ── /api/v1/coding (ICD-10 and LOINC look-up for pickers; a clinic's own code imports)
+              - paths: ["/api/v1/coding/icd10", "/api/v1/coding/loinc"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/coding/{system}/import"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              # ── /api/v1/data-export, /api/v1/fhir, /api/v1/webhooks (the clinic's own data; API clients use the integration role)
+              - paths: ["/api/v1/data-export"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/fhir/metadata", "/api/v1/fhir/Patient", "/api/v1/fhir/Patient/{id}", "/api/v1/fhir/Patient/{id}/$everything"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, integration]
+              - paths: ["/api/v1/webhooks", "/api/v1/webhooks/{id}/deliveries"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/webhooks", "/api/v1/webhooks/{id}/test"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/webhooks/{id}"]
+                methods: [DELETE]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
               # ── /api/v1/dashboard
               - paths: ["/api/v1/dashboard/clinic-admin"]
                 methods: [GET]
@@ -224,6 +347,12 @@ pv:
               - paths: ["/api/v1/erp/ot/{id}/status"]
                 methods: [POST]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/erp/ot/checklist"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/erp/ot/{id}/checklist/{phase}"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
               - paths: ["/api/v1/erp/packages"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
@@ -249,6 +378,13 @@ pv:
               - paths: ["/api/v1/esign/status"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              # ── /api/v1/feedback and /api/v1/journey (visit ratings; patient WhatsApp updates sent)
+              - paths: ["/api/v1/feedback"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
+              - paths: ["/api/v1/journey/messages"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
               # ── /api/v1/hr
               - paths: ["/api/v1/hr/attendance"]
                 methods: [GET]
@@ -554,21 +690,33 @@ pv:
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
               # ── /api/v1/patients
+              # Chart summary and plain-language patient search (C13): clinical staff, never patients
+              - paths: ["/api/v1/patients/{id}/chart-summary"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse]
+              - paths: ["/api/v1/patients/ask"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse]
               - paths: ["/api/v1/patients"]
                 methods: [GET] # any signed-in member
+              # The front desk registers and updates patients (phone, allergies, contacts); only admins delete.
+              # A patient calling the reads gets only their own record (the API scopes it).
               - paths: ["/api/v1/patients"]
                 methods: [POST]
-                roles: [super_admin, clinic_admin, staff]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist]
               - paths: ["/api/v1/patients/me"]
                 methods: [GET] # any signed-in member
               - paths: ["/api/v1/patients/register"]
                 methods: [POST]
-                roles: [super_admin, clinic_admin, staff]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist]
               - paths: ["/api/v1/patients/{patientId}"]
                 methods: [GET] # any signed-in member
               - paths: ["/api/v1/patients/{patientId}"]
-                methods: [PUT, PATCH, DELETE]
-                roles: [super_admin, clinic_admin, staff]
+                methods: [PUT, PATCH]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist, doctor] # patient.update
+              - paths: ["/api/v1/patients/{patientId}"]
+                methods: [DELETE]
+                roles: [super_admin, clinic_admin, hospital_admin]
               - paths: ["/api/v1/patients/{patientId}/allergies"]
                 methods: [GET] # any signed-in member
               - paths: ["/api/v1/patients/{patientId}/allergies"]
@@ -588,6 +736,9 @@ pv:
               - paths: ["/api/v1/pharmacy/alerts/expiring-soon"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              - paths: ["/api/v1/pharmacy/allergy-check"]
+                methods: [GET]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, doctor, nurse, pharmacist]
               - paths: ["/api/v1/pharmacy/alerts/low-stock"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
@@ -619,6 +770,16 @@ pv:
                 orgs: [platform]
               - paths: ["/api/v1/platform/phi/encrypt-existing"]
                 methods: [POST]
+                roles: [super_admin]
+                orgs: [platform]
+              # Status page incidents and maintenance (C14)
+              - paths: ["/api/v1/platform/status/incidents", "/api/v1/platform/status/incidents/{id}/updates"]
+                methods: [GET, POST]
+                roles: [super_admin]
+                orgs: [platform]
+              # PHI key rotation (C14): status and a background re-encryption under the current key
+              - paths: ["/api/v1/platform/phi/rotation"]
+                methods: [GET, POST]
                 roles: [super_admin]
                 orgs: [platform]
               - paths: ["/api/v1/platform/dashboard/overview"]
@@ -741,22 +902,77 @@ pv:
                 methods: [POST]
                 roles: [super_admin]
                 orgs: [platform]
-              # ── /api/v1/prescriptions
-              - paths: ["/api/v1/prescriptions"]
+              # ── /api/v1/portal (the signed-in patient's own records; the API finds them by the caller)
+              - paths: ["/api/v1/portal/summary", "/api/v1/portal/bills", "/api/v1/portal/bills/{id}", "/api/v1/portal/lab-reports",
+                        "/api/v1/portal/doctors", "/api/v1/portal/doctors/{doctorId}/slots"]
+                methods: [GET]
+                roles: [patient]
+              - paths: ["/api/v1/portal/bills/{id}/pay", "/api/v1/portal/appointments"]
+                methods: [POST]
+                roles: [patient]
+              # Video consultations (C16): the patient's own seat, from the portal
+              - paths: ["/api/v1/portal/appointments/{id}/video/join"]
+                methods: [POST]
+                roles: [patient]
+              # DPDP (C14): the patient's consents, requests and a download of their own record
+              - paths: ["/api/v1/portal/privacy", "/api/v1/portal/my-data"]
+                methods: [GET]
+                roles: [patient]
+              - paths: ["/api/v1/portal/privacy/consents/{purpose}"]
+                methods: [PUT]
+                roles: [patient]
+              - paths: ["/api/v1/portal/privacy/requests"]
+                methods: [POST]
+                roles: [patient]
+              # ── Video consultations through Runvance Meet (C16)
+              - paths: ["/api/v1/teleconsult/status"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, patient]
+              - paths: ["/api/v1/appointments/{id}/video"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, receptionist]
+              - paths: ["/api/v1/appointments/{id}/video/join"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
+              # ── /api/v1/downtime (C14: the copy downtime stations keep, encrypted under their PIN)
+              - paths: ["/api/v1/downtime/snapshot"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist]
+              # ── /api/v1/privacy (DPDP: consents taken at the desk, requests, the grievance officer)
+              - paths: ["/api/v1/privacy/patients/{patientId}/consents"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist]
+              - paths: ["/api/v1/privacy/patients/{patientId}/consents/{purpose}"]
+                methods: [PUT]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, receptionist]
+              - paths: ["/api/v1/privacy/patients/{patientId}/requests"]
                 methods: [GET, POST]
-                roles: [super_admin, clinic_admin, staff, doctor, patient]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, receptionist]
+              - paths: ["/api/v1/privacy/requests", "/api/v1/privacy/settings"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/privacy/requests/{id}/status"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/privacy/settings"]
+                methods: [PUT]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              # ── /api/v1/prescriptions (patients read their own appointments' only; the API checks whose)
+              - paths: ["/api/v1/prescriptions"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, pharmacist]
+              - paths: ["/api/v1/prescriptions"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor]
               - paths: ["/api/v1/prescriptions/by-appointment/{appointmentId}"]
                 methods: [GET]
-                roles: [super_admin, clinic_admin, staff, doctor, patient]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, pharmacist, patient]
               - paths: ["/api/v1/prescriptions/{prescriptionId}"]
                 methods: [GET]
-                roles: [super_admin, clinic_admin, staff, doctor, patient]
-              - paths: ["/api/v1/prescriptions/{prescriptionId}/generate-pdf"]
-                methods: [POST]
-                roles: [super_admin, clinic_admin, staff, doctor, patient]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, pharmacist, patient]
               - paths: ["/api/v1/prescriptions/{prescriptionId}/items"]
-                methods: [GET, POST]
-                roles: [super_admin, clinic_admin, staff, doctor, patient]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, pharmacist, patient]
               # ── /api/v1/push
               - paths: ["/api/v1/push/send"]
                 methods: [POST]
@@ -767,14 +983,18 @@ pv:
               - paths: ["/api/v1/push/tokens"]
                 methods: [POST, DELETE]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
-              # ── /api/v1/queue
+              # ── /api/v1/queue (the front desk's day: names and phone numbers, so staff only)
               - paths: ["/api/v1/queue"]
-                methods: [GET] # any signed-in member
-              - paths: ["/api/v1/queue/token"]
-                methods: [POST] # any signed-in member
-              - paths: ["/api/v1/queue/{doctorId}"]
-                methods: [GET] # any signed-in member
+                methods: [GET]
+                roles: [super_admin, clinic_admin, hospital_admin, staff, receptionist, doctor, nurse]
               # ── /api/v1/reports
+              # Report builder and quality indicators (C13)
+              - paths: ["/api/v1/reports/builder/datasets", "/api/v1/quality/indicators"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, accountant]
+              - paths: ["/api/v1/reports/builder/run"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, accountant]
               - paths: ["/api/v1/reports/attendance"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
@@ -790,6 +1010,13 @@ pv:
               - paths: ["/api/v1/reports/revenue"]
                 methods: [GET]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              # ── /api/v1/setup (sized set-up, imports, go-live checklist, plan usage)
+              - paths: ["/api/v1/setup/checklist", "/api/v1/setup/usage"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
+              - paths: ["/api/v1/setup/apply", "/api/v1/setup/import/{kind}"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin]
               # ── /api/v1/staff
               - paths: ["/api/v1/staff"]
                 methods: [GET, POST] # any signed-in member
@@ -861,6 +1088,20 @@ pv:
               - paths: ["/api/v1/treatments/{id}/start"]
                 methods: [POST]
                 roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, staff, doctor, nurse, receptionist, pharmacist, lab_technician, accountant, inventory_manager, hr_manager]
+              # AI scribe (C6): doctors only; audio pieces are under a minute (about 2 MB)
+              - paths: ["/api/v1/treatments/{id}/scribe"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
+              # ── /api/v1/scribe
+              - paths: ["/api/v1/scribe/status"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
+              - paths: ["/api/v1/scribe/{id}"]
+                methods: [GET]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
+              - paths: ["/api/v1/scribe/{id}/pieces/{seq}", "/api/v1/scribe/{id}/draft", "/api/v1/scribe/{id}/applied", "/api/v1/scribe/{id}/discard"]
+                methods: [POST]
+                roles: [super_admin, tenant_admin, clinic_admin, hospital_admin, doctor]
               # ── /api/v1/users
               - paths: ["/api/v1/users"]
                 methods: [GET, POST]
