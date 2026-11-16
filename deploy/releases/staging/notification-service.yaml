@@ -2,12 +2,12 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   notification-service  acrinterviewaistaging.azurecr.io/notification-service:8b178f9
-#   notification-web      acrinterviewaistaging.azurecr.io/notification-web:8b178f9
+#   notification-service  acrinterviewaistaging.azurecr.io/notification-service:6b46696
+#   notification-web      acrinterviewaistaging.azurecr.io/notification-web:6b46696
 releaseOf: notification-service
 # The commit (or, staging only, branch) of git@github.com:payvizio-pg/notification-service.git whose chart Argo CD renders.
-chartRevision: "8b178f9b1c247f94b9b712fc35df4d4d81635810"
+chartRevision: "6b46696ff1c7e1593214b954c6f22037eac49713"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: "8b178f9"
+    tag: "6b46696"
