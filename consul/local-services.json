@@ -1,5 +1,5 @@
 {
-  "comment": "Local dev servers that aren't Spring Boot, registered in the local Consul so pg-api-gateway finds them as lb://<name>. Start each on its port here (e.g. vite --port 5174). Spring services register themselves.",
+  "comment": "Local dev servers that Spring Boot doesn't register itself, in the local Consul so pg-api-gateway finds them as lb://<name>. Start each on its port here (e.g. vite --port 5174). Spring services register themselves; notification-dashboard is Notify's second port (notify.dashboard.port), which in Kubernetes Consul's catalog sync registers.",
   "services": [
     {
       "name": "leados-web",
@@ -16,6 +16,10 @@
     {
       "name": "notification-web",
       "port": 5176
+    },
+    {
+      "name": "notification-dashboard",
+      "port": 8082
     },
     {
       "name": "demoagent-web",
