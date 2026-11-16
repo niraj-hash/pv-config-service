@@ -13,7 +13,10 @@ pv:
         browser-sign-in: true
         routes:
           - id: notification-dashboard-api
-            upstream: lb://notification-service
+            # Notify's dashboard port (its Service notification-dashboard, through Consul's catalog
+            # sync): the only port where it honours X-PV-* and only the gateway may reach. The
+            # products' backends call lb://notification-service, where identity headers are ignored.
+            upstream: lb://notification-dashboard
             paths: ["/api/**"]
             access: PROTECTED
             default-rule: DENY
