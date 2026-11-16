@@ -7,7 +7,7 @@
 #   interviewai-web       acrinterviewaistaging.azurecr.io/interviewai-web:ba360a0
 releaseOf: interview
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/interview-ai-management.git whose chart Argo CD renders.
-chartRevision: "ba360a0702beafcfed9ca4bb96df8b91e7a42b07"
+chartRevision: "6481d7b0722906d25168f761a067bb35af6436c6"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
