@@ -6,7 +6,7 @@
 #   notification-web      acrinterviewaistaging.azurecr.io/notification-web:6b46696
 releaseOf: notification-service
 # The commit (or, staging only, branch) of git@github.com:payvizio-pg/notification-service.git whose chart Argo CD renders.
-chartRevision: "6b46696ff1c7e1593214b954c6f22037eac49713"
+chartRevision: "4c0fc48a4e5e8b7e275c1355971cabf2ca258d94"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
