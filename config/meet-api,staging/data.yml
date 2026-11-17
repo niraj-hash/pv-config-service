@@ -3,3 +3,7 @@
 # active profile's context is missing ("config/pv-auth-service,staging/ ... does not exist", 2026-11-10).
 runvance:
   environment: staging
+meet:
+  recording:
+    # ai-demo-agent deploy/livekit/provision.sh (rg-interviewai-staging, centralindia); meet-api's identity id-meet-staging.
+    storage-account: stmeetstaging
