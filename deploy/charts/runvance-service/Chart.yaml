@@ -6,7 +6,7 @@ description: >
   External Secrets, Consul configuration and discovery, probes, HPA, PDB, NetworkPolicy, and the
   edge Ingress (pg-api-gateway only). See README.md.
 type: library
-version: 0.1.0
+version: 0.1.1
 keywords: [runvance, spring-boot, consul, aks]
 maintainers:
   - name: Runvance platform

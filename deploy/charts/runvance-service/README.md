@@ -11,7 +11,7 @@ names, adding a service): [docs/runtime.md](../../../docs/runtime.md).
 |---|---|
 | Deployment | non-root (UID 10001), read-only root file system with a writable `/tmp`, all capabilities dropped, seccomp `RuntimeDefault`; rolling update one pod at a time (`maxSurge 1`, `maxUnavailable 0`); spread over zones and nodes; startup/readiness/liveness probes on actuator (`/actuator/health/liveness`, `/readiness`) on the management port; a 5 s `preStop` so callers drop the pod first; no service links, no Kubernetes API token |
 | Platform env | `CONFIG_IMPORT=consul:`, `SPRING_PROFILES_ACTIVE` (= `environment` unless `spring.profiles`), `CONSUL_HOST`/`CONSUL_PORT`, `SPRING_CLOUD_CONSUL_DISCOVERY_IP_ADDRESS` = the pod IP, `JAVA_TOOL_OPTIONS`; a chart's own `env` wins on the same name |
-| ExternalSecret(s) | Key Vault → `<name>-secrets` (the Consul token as `CONSUL_TOKEN`, plus `secrets.env`), mounted with `envFrom`; each `secrets.optional.<group>` its own `<name>-<group>` Secret, mounted optional |
+| ExternalSecret(s) | Key Vault → `<name>-secrets` (the Consul token as `CONSUL_TOKEN`, plus `secrets.env`), mounted with `envFrom`; each `secrets.optional.<group>` its own `<name>-<group>` Secret, mounted optional. Argo CD shows an optional group whose Key Vault entries were never added as Healthy, "Not configured" (its ExternalSecret health rule relies on these names; the group `secrets` is reserved) |
 | ServiceAccount | `azure.workload.identity/client-id` (and the pod label `azure.workload.identity/use`) when `serviceAccount.workloadIdentity.clientId` is set |
 | Service | ClusterIP port 80 → `http`; `consul.hashicorp.com/service-sync: "false"` for Spring services (they register themselves), `"true"` plus the service name with `consul.catalogSync.enabled` |
 | HPA | CPU 70 %, `replicas`…4; the Deployment then leaves `replicas` to it |
@@ -23,7 +23,8 @@ names, adding a service): [docs/runtime.md](../../../docs/runtime.md).
 Every key and its default is in [templates/_defaults.tpl](templates/_defaults.tpl). A chart's values
 are deep-merged over them (maps key by key; lists, scalars, `false` and `""` replace), so a chart sets
 only what differs. Guards: `name` must be a DNS label, `image.tag: latest` is refused, a caller
-without pod labels is refused, an Ingress anywhere but the gateway is refused.
+without pod labels is refused, an Ingress anywhere but the gateway is refused, an optional secrets
+group named `secrets` is refused.
 
 ## Minimal example
 
@@ -119,9 +120,9 @@ argument, for a chart that renders some itself.
 **Published (real deployments).** The library lives in ACR as an OCI chart; products pin a version:
 
 ```bash
-helm package deploy/charts/runvance-service                     # runvance-service-0.1.0.tgz
+helm package deploy/charts/runvance-service                     # runvance-service-<version>.tgz
 az acr login -n <acr>                                           # or: helm registry login <acr>.azurecr.io
-helm push runvance-service-0.1.0.tgz oci://<acr>.azurecr.io/helm
+helm push runvance-service-<version>.tgz oci://<acr>.azurecr.io/helm
 ```
 
 ```yaml

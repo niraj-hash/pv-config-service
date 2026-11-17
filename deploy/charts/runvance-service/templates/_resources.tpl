@@ -91,9 +91,15 @@ spec:
 {{- if $v.consul.enabled -}}{{- $_ := set $items "CONSUL_TOKEN" $v._d.consulTokenKey -}}{{- end -}}
 {{- include "runvance-service.externalSecretResource" (dict "c" $c "name" $v._d.secretName "items" $items) }}
 {{- end }}
+{{- /* The names are a contract: Argo CD's ExternalSecret health rule (interview-ai-management
+     infrastructure/argocd/install/values-argocd.yaml) tells a required <name>-secrets from an
+     optional <name>-<group>, and shows an optional group that never synced as "not configured". */ -}}
 {{- range $group, $items := $v.secrets.optional }}
 {{- if not (regexMatch "^[a-z][-a-z0-9]*$" $group) -}}
 {{- fail (printf "runvance-service: secrets.optional group %q must be lower-case letters, digits and dashes" $group) -}}
+{{- end }}
+{{- if eq $group "secrets" -}}
+{{- fail "runvance-service: secrets.optional group \"secrets\" is reserved: <name>-secrets is the required secret (secrets.env)" -}}
 {{- end }}
 {{- include "runvance-service.externalSecretResource" (dict "c" $c "name" (printf "%s-%s" $v.name $group) "items" $items) }}
 {{- end }}
