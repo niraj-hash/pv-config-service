@@ -16,7 +16,7 @@ ai:
     jwks-url: lb://pv-auth-service/oauth2/jwks
     required-scope: ai.invoke
     admin-scope: ai.admin
-    allowed-products: [leados, payroll, demoagent, hms, interview, runvance]
+    allowed-products: [leados, payroll, demoagent, hms, interview, runvance, meet]
   consul:
     only-passing: true
 
@@ -70,8 +70,15 @@ ai:
     google: { type: gemini, key-env: GEMINI_API_KEY }
     # Deepgram takes files up to 2 GB, and fetches a source_url itself.
     deepgram: { type: deepgram, key-env: DEEPGRAM_API_KEY, max-audio-bytes: 2147483648 }
-    # Short-audio REST (up to 60 seconds of audio): Connect's utterances.
-    azure-speech: { type: azure-speech, key-env: AZURE_SPEECH_KEY, region: centralindia, max-audio-bytes: 10485760 }
+    # Azure Speech in Central India. Short-audio REST (up to 60 seconds: Connect's utterances, Health's
+    # scribe pieces) takes this provider's 10 MB; fast transcription (Meet's recordings) has its own
+    # caps on its model below. api-version: fast transcription's REST API (GA).
+    azure-speech:
+      type: azure-speech
+      key-env: AZURE_SPEECH_KEY
+      region: centralindia
+      api-version: "2025-10-15"
+      max-audio-bytes: 10485760
     # Runvance CRM's self-hosted faster-whisper (PayVizio-LeadOS infra/transcription, OpenAI shape):
     # Ad Studio captions, on by default. Its address is the CRM's internal container app; with no
     # key or no route to it, crm.ad-captions falls back to OpenAI whisper-1. Takes what CRM's upload
@@ -278,6 +285,18 @@ ai:
       description: Azure Speech short audio (up to 60 seconds)
       capabilities: [transcription]
       pricing: { per-audio-minute: 0.0167 }
+    - id: azure-speech:fast
+      description: "Azure Speech fast transcription (centralindia): long recordings, phrase and word timings, speakers, language identification"
+      capabilities: [transcription]
+      word-timestamps: true
+      diarization: true
+      # The API takes files under 500 MB and 5 hours (Microsoft's limits, 2026-11). Each call here gets
+      # at most 400 MB and 2 hours, so it stays short: a longer recording is measured (ffprobe) and cut
+      # into mono MP3 pieces of about equal length, transcribed side by side and joined on its clock.
+      max-audio-bytes: 419430400
+      max-audio-seconds: 7200
+      split-oversized-audio: true
+      pricing: { per-audio-minute: 0.006 }   # $0.36 an hour: Azure's retail price in centralindia (2026-11)
     - id: azure-speech:neural
       description: "Azure neural voices (SSML: rate and pitch)"
       capabilities: [speech]
@@ -544,6 +563,34 @@ ai:
       params: { temperature: 0.2, max-output-tokens: 1200 }
       timeout-ms: 20000
 
+    # ------------------------------------------------------------ Runvance Meet (meet)
+    # Recorded meetings (consent recorded by Meet): one call per speaker's track, then the notes.
+    meet.recording-transcription:
+      description: >-
+        One speaker's microphone from a recorded meeting (LiveKit track Egress: Ogg/Opus, mono, up to several hours),
+        by source_url; phrases with offsets (no speakers: one person per file)
+      products: [meet]
+      capability: transcription
+      # Azure Speech in Central India only: meeting audio never goes to a speech company or region
+      # outside India (owner's decision D2, 2026-11-17). A second attempt on the same model is fine.
+      candidates: [azure-speech:fast]
+      # Language identification picks each file's main locale (each file is one person).
+      params: { locales: [en-IN, hi-IN] }
+      max-audio-bytes: 1073741824     # 1 GB: a speaker's Opus track is tens of MB an hour
+      timeout-ms: 1800000             # one attempt: download, measure, cut, every piece
+      deadline-ms: 3600000
+      max-attempts: 2
+    meet.notes:
+      description: >-
+        Notes from a recorded meeting's transcript: summary, decisions, action items, chapters, open questions and a
+        follow-up email draft, each item citing its transcript lines (prompt held here)
+      products: [meet]
+      candidates: [anthropic:claude-sonnet-5-5, openai:gpt-5]
+      prompt: meet.notes
+      params: { cache-system-prompt: true, max-output-tokens: 12000, reasoning: { effort: medium } }
+      timeout-ms: 180000
+      deadline-ms: 400000
+
   prompts:
     crm.lead-summary:
       active: 1
@@ -700,6 +747,120 @@ ai:
                 summary: { type: string }
                 actions: { type: array, items: { type: string }, maxItems: 3 }
               required: [intent, summary, actions]
+    meet.notes:
+      active: 1
+      versions:
+        1:
+          notes: New (2026-11-17) for Runvance Meet's AI notes (ai-demo-agent meet/docs/product/ai-meetings-plan.md, D3)
+          system: |-
+            You write the notes of one recorded meeting from its transcript. Each transcript line is
+            "[id] time Name: text": id is the line's segment id (such as s123), time is when the line starts,
+            counted from the start of the recording (m:ss or h:mm:ss), and Name is the person speaking. People
+            may mix Hindi, English and other languages, and the transcript may have recognition errors.
+
+            Rules:
+            - Use only what the transcript says. Never add facts, figures, names, dates, decisions or
+              commitments that nobody said. When something is unclear, leave it out rather than guess.
+            - Cite the lines: every decision, action item and open question lists in segmentIds the ids of the
+              lines that state it, exactly as written in the transcript (such as "s123"). Never make up an id.
+            - Report what was said and agreed, never the people. Do not judge, rate, score, praise or criticise
+              anyone or how they spoke, and never infer anything about a person from their voice, accent,
+              tone, name or way of speaking (such as origin, gender, age, mood or ability).
+            - Write in the meeting's main language (the one most of the talk is in) and give it in language as
+              a BCP 47 code such as en or hi; when a notes language is given, write in that one instead. Keep
+              names, product names and numbers as spoken.
+            - Never invent items to fill a field. When nothing was decided, decisions is an empty array (the
+              summary may say that no decisions were made); the same for action items and open questions.
+
+            Fields:
+            - summary: 4 to 8 sentences on what the meeting covered and where it ended.
+            - decisions: what the participants agreed or decided.
+            - actionItems: tasks someone took on or was asked to do. owner is the name of the person who will
+              do it, as spoken in the meeting or the speaker who took it on, or null when nobody was named.
+              due is the deadline exactly as said ("by Friday", "next week"), or null; never turn it into a
+              calendar date.
+            - chapters: the meeting's main parts in order, each with a short title, startMs (the time of its
+              first line, in milliseconds from the start of the recording) and a one- or two-sentence summary.
+            - questions: questions raised and still open when the meeting ended (not ones answered in it).
+            - followUpEmail: a short, neutral email to the participants recapping the decisions and the action
+              items with their owners. No names the transcript does not give, no sign-off name, and no
+              promises beyond what was agreed.
+
+            Long meetings come in parts, in order. When notes from earlier parts are given, return the notes
+            of the whole meeting so far: keep their items and segment ids, and add or update what this part
+            says.
+          user: |
+            Meeting title: {{title}}
+            Participants: {{participants}}
+            Notes language: {{notes_language}}
+            Notes from earlier parts of this meeting:
+            {{earlier_notes}}
+
+            Transcript:
+            {{transcript}}
+          variables:
+            transcript: { untrusted: true, description: "the meeting in order, one line per segment: [s123] 12:34 Name: text" }
+            title: { untrusted: true, required: false, description: the meeting's title }
+            participants: { untrusted: true, required: false, description: "the attendees' names, comma-separated" }
+            notes_language: { required: false, description: "the workspace's notes language (en, hi), when it set one" }
+            earlier_notes: { untrusted: true, required: false, description: "long meetings: the notes JSON of the parts before this one" }
+          response-format:
+            type: json_schema
+            name: meeting_notes
+            strict: true
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                summary: { type: string, description: 4 to 8 sentences }
+                decisions:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      text: { type: string }
+                      segmentIds: { type: array, items: { type: string } }
+                    required: [text, segmentIds]
+                actionItems:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      text: { type: string }
+                      owner: { anyOf: [{ type: string }, { type: "null" }], description: "the name as spoken, or null" }
+                      due: { anyOf: [{ type: string }, { type: "null" }], description: "the deadline as said, or null" }
+                      segmentIds: { type: array, items: { type: string } }
+                    required: [text, owner, due, segmentIds]
+                chapters:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      title: { type: string }
+                      startMs: { type: integer, description: milliseconds from the start of the recording }
+                      summary: { type: string }
+                    required: [title, startMs, summary]
+                questions:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      text: { type: string }
+                      segmentIds: { type: array, items: { type: string } }
+                    required: [text, segmentIds]
+                followUpEmail:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    subject: { type: string }
+                    body: { type: string }
+                  required: [subject, body]
+                language: { type: string, description: "the notes' language, a BCP 47 code such as en or hi" }
+              required: [summary, decisions, actionItems, chapters, questions, followUpEmail, language]
 
   # Rate limits and monthly budgets (USD, estimated). Placeholders until the owner sets them;
   # `default` applies to products / tenants without their own entry. Budgets count platform-key

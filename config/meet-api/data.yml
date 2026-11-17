@@ -2,7 +2,7 @@
 # and prod answer the same meetings.runvance.com; docs/runtime.md). Moved here on 2026-11-09 from the retired Container
 # Apps deployment (ai-demo-agent infra/azure/meet.sh). Safe local defaults stay in meet/api application.yml; deployment
 # facts (the database host) in the chart's values-<env>.yaml (ai-demo-agent deploy/helm/meet); secrets in Key Vault (the
-# chart's values.yaml names them: MEET_SECRET, MEET_JITSI_SECRET, SERVICE_CLIENT_SECRET, the database password). Local
+# chart's values.yaml names them: MEET_SECRET, MEET_LIVEKIT_API_KEY/SECRET, SERVICE_CLIENT_SECRET, the database password). Local
 # runs (profile local) read config/meet-api,local instead. Prices: conf.d/pricing.yml.
 meet:
   # Where people open Meet, through pg-api-gateway (conf.d/meet.yml): the links in emails point here.
@@ -11,18 +11,48 @@ meet:
   network:
     # Proxies in front of the API that append to X-Forwarded-For: the ingress controller and pg-api-gateway.
     trusted-proxy-hops: 2
-  jitsi:
-    # The token-only Jitsi on its own VM (ai-demo-agent deploy/README.md, "Jitsi"); JWT_ACCEPTED_ISSUERS there is demoagent.
-    domain: meet.runvance.com
-    app-id: demoagent
+  # Calls run on Meet's own LiveKit server (ai-demo-agent deploy/livekit: LiveKit, Egress, TURN on one VM in Central
+  # India). Browsers connect to `url`; meet-api mints their tokens and calls the Room and Egress APIs at `api-url`.
+  # LiveKit posts its webhooks to https://meetings.runvance.com/api/v1/livekit/webhook (pg-api-gateway, conf.d/meet.yml).
+  livekit:
+    url: wss://rtc.runvance.com
+    api-url: https://rtc.runvance.com
+    token-ttl: 3h
+  # Recordings (ai-meetings-plan.md): Egress writes them to Blob with its own key; meet-api reads, signs read links and
+  # deletes with workload identity. The storage account is per environment (meet-api,<env>).
+  recording:
+    container: meet-recordings
+    retention-days: 90
+    layout: speaker
+    # Shown on the consent notice and stored with every consent; change it whenever the notice's words change.
+    notice-version: "2026-11-17"
+  # Transcripts and notes through runvance-ai-service (profiles in config/ai-service), as Meet's SERVICE client below.
+  # Audio is transcribed in Central India (Azure Speech); meetings created by API-key platforms bill the platform org.
+  ai:
+    url: lb://ai-service
+    transcription-profile: meet.recording-transcription
+    notes-profile: meet.notes
+    language: en-IN
+    default-org-id: 791e250f-8108-4ee4-ace8-7567332296d0
   email:
     # Every email (invitations, join requests, account decisions) through Runvance Notify, under Meet's name.
     provider: notify
-  # Notify's internal API and Meet's SERVICE client in pv-auth-service (scope comm.send). Its secret is
+  # Notify's internal API and Meet's SERVICE client in pv-auth-service (scopes comm.send, ai.invoke). Its secret is
   # SERVICE_CLIENT_SECRET (Key Vault meet-api-service-client-secret).
   notification:
     url: lb://notification-service
     token-url: lb://pv-auth-service/oauth2/token
     client-id: meet-svc
-# Outbound resilience: Meet calls only Runvance Notify and pv-auth-service, whose instances (and the defaults) are
-# config/application's. Nothing of its own.
+# Outbound resilience: Runvance Notify and pv-auth-service use config/application's instances. ai-service's are
+# widened for meeting notes: the meet.notes profile may take up to 400 s inside ai-service (deadline-ms), so Meet waits
+# longer than the shared 130 s and does not count a long answer as a failure. Transcriptions do not go through these:
+# meet.ai.transcription-timeout (1 h) bounds them. LiveKit and Blob calls are short; the job runner retries with back-off.
+resilience4j:
+  timelimiter:
+    instances:
+      ai-service:
+        timeout-duration: 420s
+  circuitbreaker:
+    instances:
+      ai-service:
+        slow-call-duration-threshold: 300s

@@ -7,7 +7,7 @@
 # docs/platform-messaging-survey.md (what each product sends today).
 #
 # Non-secret only. From the environment (Key Vault -> Kubernetes secrets): SENDGRID_API_KEY and
-# SENDGRID_FROM_ADDRESS (the platform sender, noreply@runvance.com), PLATFORM_TENANT_ID,
+# SENDGRID_FROM_ADDRESS (unused: the platform sender is sendgrid.from-address below), PLATFORM_TENANT_ID,
 # APP_ENCRYPTION_KEY, FCM_SERVICE_ACCOUNT_JSON (the Runvance Firebase project's service account),
 # VAPID_PRIVATE_KEY (the private half of the platform's Web Push key pair). The non-secret halves
 # (the VAPID public key and subject, the Firebase project id) belong in this file once they exist;
@@ -40,8 +40,9 @@ notify:
       allowed-hosts: [fcm.googleapis.com, updates.push.services.mozilla.com, .push.apple.com, .notify.windows.com]
 
   # Products that may send, by pv-auth-service catalog key (the token's `product`). email.from-name
-  # is how the product signs its mail ("Runvance Payroll" <noreply@runvance.com>); from-address
-  # defaults to the platform sender. reply-to is where answers go (a send may name its own, e.g.
+  # is how the product signs its mail ("Runvance Payroll" <info@runvance.com>); from-address
+  # defaults to the platform sender (owner, 2026-11-17: every Runvance email comes from
+  # info@runvance.com, so set none here). reply-to is where answers go (a send may name its own, e.g.
   # the recruiter). channels limits what a product may use (empty = all); org-required: false only
   # for products whose messages are for no organization.
   products:
@@ -83,3 +84,10 @@ notify:
 #   push:
 #     fcm: { project-id: runvance-prod }
 #     web-push: { public-key: <base64url P-256 public key>, subject: "mailto:support@runvance.com" }
+
+# The platform sender, in every environment (owner, 2026-11-17: "for email communication, ensure sender would be
+# info@runvance.com"). Every product's system mail and pv-auth-service's account mail go out as
+# "<product name>" <info@runvance.com>; it must stay a verified sender in the platform's SendGrid account. This wins
+# over the SENDGRID_FROM_ADDRESS environment variable. Not the CRM lead inbox: customers send from their own senders.
+sendgrid:
+  from-address: info@runvance.com

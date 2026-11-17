@@ -32,6 +32,23 @@ pv:
               - paths: ["/api/v1/public/invites/{token}/join"]
                 methods: [POST]
                 anonymous: true
+              # In a call (guests included): authorized by Meet's own call token from the join (ai-meetings-api.md).
+              - paths: ["/api/v1/public/calls/{callToken}/state"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/public/calls/{callToken}/consent", "/api/v1/public/calls/{callToken}/decline",
+                        "/api/v1/public/calls/{callToken}/recording/start", "/api/v1/public/calls/{callToken}/recording/stop",
+                        "/api/v1/public/calls/{callToken}/end"]
+                methods: [POST]
+                anonymous: true
+              # A host's shared notes and recording link.
+              - paths: ["/api/v1/public/shares/{token}"]
+                methods: [GET]
+                anonymous: true
+              # Meet's LiveKit server (deploy/livekit): meet-api checks LiveKit's signature (Authorization) on the body.
+              - paths: ["/api/v1/livekit/webhook"]
+                methods: [POST]
+                anonymous: true
               # Who am I, and where my request to join stands: every signed-in person, PENDING ones included.
               - paths: ["/api/v1/me"]
                 methods: [GET]
@@ -54,6 +71,25 @@ pv:
                         "/api/v1/meetings/{id}/shared-link/reset"]
                 methods: [POST]
                 permissions: [meeting.manage]
+              # After the call: sessions, recordings, transcripts, AI notes, shares, search (the owner's meetings).
+              - paths: ["/api/v1/meetings/{id}/sessions", "/api/v1/meetings/{id}/sessions/{sessionId}",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/transcript",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/notes",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/media",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/shares", "/api/v1/search"]
+                methods: [GET]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}/recordings/{recordingId}/notes/regenerate",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/shares"]
+                methods: [POST]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}/recordings/{recordingId}/action-items/{itemId}"]
+                methods: [PATCH]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/meetings/{id}/recordings/{recordingId}",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/shares/{shareId}"]
+                methods: [DELETE]
+                permissions: [meeting.manage]
               # The super admin console: approvals, platforms and their keys, oversight (was the env-configured
               # superadmin, hasRole SUPERADMIN on /api/v1/superadmin/**). Platform organization only.
               - paths: ["/api/v1/superadmin/overview", "/api/v1/superadmin/requests", "/api/v1/superadmin/users",
@@ -75,6 +111,10 @@ pv:
             rate-limits:
               - { key: CLIENT_IP, paths: ["/api/v1/public/invites/{token}/join"], methods: [POST], replenish-rate: 1, burst-capacity: 600, requested-tokens: 10 }
               - { key: USER, paths: ["/api/v1/meetings/{id}/invites"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 36 }
+              # LiveKit sends a burst of events per meeting (joins, tracks, recordings): generous, from its one address.
+              - { key: CLIENT_IP, paths: ["/api/v1/livekit/webhook"], methods: [POST], replenish-rate: 50, burst-capacity: 2000 }
+              # Notes regenerate through ai-service: a few per hour per person.
+              - { key: USER, paths: ["/api/v1/meetings/{id}/recordings/{recordingId}/notes/regenerate"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 600 }
           - id: meet-web
             access: PUBLIC
             upstream: ${MEET_WEB_URI:lb://meet-web}

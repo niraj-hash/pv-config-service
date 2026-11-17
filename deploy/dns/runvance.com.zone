@@ -46,6 +46,11 @@ assessment    300   IN CNAME  demoagent-assessment.delightfulsky-9f9ecaae.centra
 asuid.connect       IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
 asuid.assessment    IN TXT    "989F704F050A90CBFFC88C518F9527868A004E166957CCE4855F2263593FFAFD"
 
-; --- The Jitsi VM Meet and Connect use (config/meet-api jitsi.domain; token-only, JWT_APP_SECRET in Key Vault
-;     runvance-jitsi-jwt-secret). Not behind the gateway: browsers talk to Jitsi directly. ---------------
+; --- The Jitsi VM Connect uses (token-only, JWT_APP_SECRET in Key Vault runvance-jitsi-jwt-secret). Not behind the
+;     gateway: browsers talk to Jitsi directly. Meet moved to LiveKit (below) on 2026-11-17. -------------------
 meet                IN A      20.219.8.76
+
+; --- Runvance Meet's LiveKit VM (ai-demo-agent deploy/livekit, vm-livekit-staging): rtc = signalling and the Room and
+;     Egress APIs, turn = TURN over TLS. Both on 443 through Caddy; WebRTC media on UDP 50000-60000. --------------
+rtc           300   IN A      4.247.183.162
+turn          300   IN A      4.247.183.162

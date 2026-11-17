@@ -9,7 +9,4 @@ app:
   # linked to pv-auth-service organization runvance-technologies (Runvance Technologies) and approved
   # 2026-11-16. Not a secret. Each environment's Notify has its own tenant ids.
   platform-tenant-id: 6afb005c099db3337f42b85c
-sendgrid:
-  # The platform sender (SENDGRID_FROM_ADDRESS), verified in the platform's SendGrid account. Products
-  # send from it under their own names ("Runvance CRM" <info@runvance.com>), replies to their reply-to.
-  from-address: info@runvance.com
+# The platform sender (info@runvance.com) is set for every environment in config/notification-service.

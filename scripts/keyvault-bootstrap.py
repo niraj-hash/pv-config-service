@@ -79,6 +79,8 @@ ENTRIES = [
     ("meet-api-db-password", "generated", "password", True, "Meet: role of the meet database"),
     ("meet-api-secret", "generated", "token", True, "Meet: MEET_SECRET, the key behind invite links (32+ characters)"),
     ("meet-api-service-client-secret", "generated", "token", True, "Meet: its service client; register it in pv-auth-service"),
+    ("meet-api-livekit-api-key", "generated", "livekit-key", True, "Meet: its LiveKit server's API key (deploy/livekit/provision.sh configure)"),
+    ("meet-api-livekit-api-secret", "generated", "alnum48", True, "Meet: its LiveKit server's API secret (deploy/livekit/provision.sh configure)"),
     # --- Accelerator ---
     ("runvance-accelerator-db-password", "generated", "password", True, "Accelerator: role of the runvance_accelerator database"),
     # --- Consul ---
@@ -102,6 +104,10 @@ def generate(how):
         return "".join(secrets.choice(alphabet) for _ in range(24))
     if how == "key32":               # AES-256: base64 of exactly 32 random bytes
         return base64.b64encode(secrets.token_bytes(32)).decode()
+    if how == "livekit-key":         # LiveKit API key: "API" and 12 letters/digits, as LiveKit's own tool makes them
+        return "API" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+    if how == "alnum48":             # secrets read from YAML elsewhere (LiveKit's keys map): letters and digits only
+        return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(48))
     if how == "token":               # HMAC and client secrets: 64 URL-safe characters
         return secrets.token_urlsafe(48)
     if how == "rsa":                 # pv-auth-service: PKCS#8 PEM
