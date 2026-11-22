@@ -11,3 +11,10 @@ app:
       # needs "Storage Blob Data Contributor" on it). Containers ad-studio and lead-files are made on
       # first use.
       account-endpoint: https://leadosstaging.blob.core.windows.net
+leados:
+  marketing:
+    demo-requests:
+      # Runvance's own CRM workspace (pv-auth org Runvance Technologies, alias runvance-technologies),
+      # where the www.runvance.com contact form already lands: each demo request from crm.runvance.com/demo
+      # is filed there as a lead, with the ad click (UTM tags, gclid) it came from. Empty: not filed.
+      organization-id: 2d5fea60-f5db-4865-bec0-cd0fa1c729a2
