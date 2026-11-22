@@ -1487,6 +1487,10 @@ pv:
                 permissions: [member.manage]
               - paths: ["/api/v1/organizations/current/me"]
                 methods: [GET]
+              # The ad a new workspace's sign-up came from, reported once right after sign-up (any member;
+              # leados-api accepts it while the workspace waits for approval, and only for a new one).
+              - paths: ["/api/v1/organizations/current/signup-attribution"]
+                methods: [POST]
               - paths: ["/api/v1/organizations/current/teams/{teamId}/lead"]
                 methods: [PUT]
                 permissions: [member.manage]
