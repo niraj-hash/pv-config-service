@@ -2,10 +2,10 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   pg-api-gateway  acrinterviewaistaging.azurecr.io/pg-api-gateway:2ea74b9
+#   pg-api-gateway  acrinterviewaistaging.azurecr.io/pg-api-gateway:30361ab
 releaseOf: pg-api-gateway
 # The commit (or, staging only, branch) of git@github.com:payvizio-pg/pg-api-gateway.git whose chart Argo CD renders.
-chartRevision: "2ea74b957c31e16dc59dd742d6c3c831ef0889c1"
+chartRevision: "30361abd9cfd26c2deb8707ee43e1dc29d2332da"
 # Chart values (this file is the chart's last value file): the image tags.
 image:
-  tag: "2ea74b9"
+  tag: "30361ab"
