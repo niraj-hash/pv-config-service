@@ -2,10 +2,10 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   pv-auth-service  acrinterviewaistaging.azurecr.io/pv-auth-service:f8de11b
+#   pv-auth-service  acrinterviewaistaging.azurecr.io/pv-auth-service:0c19b90
 releaseOf: pv-auth-service
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/pv-auth-service.git whose chart Argo CD renders.
-chartRevision: "f8de11b91f9fffb8037beea1c365b5e1274aa89e"
+chartRevision: "0c19b907fd6a596c3a081d52e1f5ca9593f7078d"
 # Chart values (this file is the chart's last value file): the image tags.
 image:
-  tag: "f8de11b"
+  tag: "0c19b90"
