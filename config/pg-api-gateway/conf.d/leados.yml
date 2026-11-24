@@ -498,6 +498,10 @@ pv:
               - paths: ["/api/v1/communication/templates"]
                 methods: [POST]
                 permissions: [message.send]
+              # A template filled in for one lead without sending it (the Android app's WhatsApp button).
+              - paths: ["/api/v1/communication/templates/{templateId}/render"]
+                methods: [POST]
+                permissions: [message.send]
               - paths: ["/api/v1/communication/templates/{templateId}"]
                 methods: [DELETE, PUT]
                 permissions: [message.send]
