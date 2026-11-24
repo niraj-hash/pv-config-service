@@ -1057,6 +1057,10 @@ pv:
               - paths: ["/api/v1/crm/merchants/lead-links/{linkId}"]
                 methods: [DELETE]
                 permissions: [lead.write]
+              # Runvance CRM for Android: calls from a teammate's own phone, and how each went.
+              - paths: ["/api/v1/crm/phone-calls/sync", "/api/v1/crm/phone-calls/{callId}/outcome"]
+                methods: [POST]
+                permissions: [lead.write]
               - paths: ["/api/v1/crm/pipelines"]
                 methods: [GET]
                 permissions: [deal.read, lead.read, settings.read]

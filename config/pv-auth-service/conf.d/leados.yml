@@ -16,6 +16,14 @@ auth:
         color: "#c2410c"
         order: 10
       # Who invites people and sets their roles (pv-auth-service's team pages, /bff/organization), as before: owners and admins invite people and set roles.
+      # Runvance CRM for Android: signs in like the web app (PKCE) and stays signed in with rotating
+      # refresh tokens, because it syncs a salesperson's calls in the background. Its own scheme
+      # receives the sign-in and the sign-out return.
+      mobile-apps:
+        - client-id: leados-android
+          name: Runvance CRM for Android
+          redirect-uris: ["com.runvance.crm:/oauth2redirect"]
+          post-logout-redirect-uris: ["com.runvance.crm:/signedout"]
       manage-members-permission: member.manage
       self-signup: true
       # Whoever signs up sets the workspace up, as LeadOS's own sign-up made them OWNER. LeadOS
