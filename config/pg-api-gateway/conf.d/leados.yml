@@ -1065,6 +1065,10 @@ pv:
               - paths: ["/api/v1/crm/phone-calls/sync", "/api/v1/crm/phone-calls/{callId}/outcome"]
                 methods: [POST]
                 permissions: [lead.write]
+              # ...and a WhatsApp they sent a lead from their own phone (they say so in the app).
+              - paths: ["/api/v1/crm/phone-whatsapp/sent"]
+                methods: [POST]
+                permissions: [lead.write]
               - paths: ["/api/v1/crm/pipelines"]
                 methods: [GET]
                 permissions: [deal.read, lead.read, settings.read]
