@@ -14,11 +14,11 @@ in the resource group `rg-runvance-dns`. Moving it there (below, once) lets cert
 
 | Name | Points at | What it is |
 |---|---|---|
-| `*` | A `20.219.214.38` | The staging cluster's ingress. pg-api-gateway answers every product host of one label: accounts, crm, crm-api, health, connect-api, demo, notify, notify-api, meet-api, accelerator, and payroll, interview, connect, assessment and meetings once they move to it. Names it does not know get 404. |
+| `*` | A `20.219.214.38` | The staging cluster's ingress. pg-api-gateway answers every product host of one label: accounts, crm, crm-api, health, connect-api, demo, notify, notify-api, meet-api, accelerator, assessment (since 2026-11-26), and payroll, interview, connect and meetings once they move to it. Names it does not know get 404. |
 | `payroll`, `interview`, `argocd` | A `20.219.214.38` | Explicit copies of what the wildcard gives; they predate it. |
 | `api.interview` | A `20.219.214.38` | Two labels deep: the wildcard does not cover it, nor does the wildcard certificate. |
-| `connect`, `assessment`, `meetings` | CNAME to Azure Container Apps, TTL 300 | The old Connect and Meet deployments, until their cutover (below). |
-| `asuid.connect`, `asuid.assessment`, `asuid.meetings` | TXT | Container Apps' domain verification; removed with the CNAMEs. |
+| `connect`, `meetings` | CNAME to Azure Container Apps, TTL 300 | The old Connect and Meet deployments, until their cutover (below). `assessment` had one too; it was deleted on 2026-11-26, so the wildcard now sends it to the new Connect console on the cluster (sign-in at accounts.runvance.com). |
+| `asuid.connect`, `asuid.meetings` | TXT | Container Apps' domain verification; removed with the CNAMEs (`asuid.assessment` went with its CNAME on 2026-11-26). |
 | `meet` | A `20.219.8.76` | Not in any configuration here (an older Meet deployment?). Find what serves it before removing it. |
 | apex, `www` | A `20.109.151.31`, CNAME to Azure Static Web Apps | The website, with `asuid` and `asuid.www` TXT records verifying the domain to Azure. |
 | apex MX, SPF TXT, `google._domainkey`, `_dmarc` | Google Workspace | The company mailboxes (@runvance.com). |
@@ -124,7 +124,7 @@ Then the same change in `deploy/dns/runvance.com.zone`, and `scripts/dns-check.p
 ## Later changes
 
 - **Cutover of Connect and Meet** (after `demoagent-staging` and `meet-staging` are healthy behind the
-  gateway): delete `connect`, `assessment`, `meetings` (CNAME) and their `asuid.*` TXT records; the
+  gateway; `assessment` done 2026-11-26): delete `connect`, `meetings` (CNAME) and their `asuid.*` TXT records; the
   wildcard answers them from then on. Payroll and Interview need no DNS change: their records already
   point at the cluster, only the Ingress that answers moves to the gateway.
 - **Platform mail:** notification-service sends as `noreply@runvance.com` through SendGrid. Authenticate
