@@ -437,6 +437,17 @@ ai:
       deadline-ms: 80000              # with crm.prospect-check, inside the gateway's 120 s for CRM calls
       max-attempts: 1                 # a second try is a second paid search
       limits: { subject-daily-calls: 25 }   # metadata.subject_id = the person asking
+    # Ask's agent (AssistantAgentService): Claude with the CRM's read-only tools, a turn at a time; the CRM runs the
+    # tools and proposes changes for the person to apply. Web steps go through crm.web-research.
+    crm.assistant:
+      description: Ask's agent turns (tools from the CRM, read-only; up to 8 turns a question)
+      products: [leados]
+      candidates: [anthropic:claude-opus-5-5]
+      key-mode: tenant-first
+      params: { max-output-tokens: 4000, reasoning: { effort: low } }
+      timeout-ms: 30000
+      deadline-ms: 35000
+      limits: { subject-daily-calls: 300 }   # metadata.subject_id = the person asking; each turn is a call
     # The agent's second step: the grounded answer and its numbered sources become prospects (JSON schema
     # from the CRM), each tied to the sources that back it; no search here, so nothing new comes in.
     crm.prospect-check:
