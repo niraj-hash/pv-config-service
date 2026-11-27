@@ -1095,6 +1095,11 @@ pv:
               - paths: ["/api/v1/crm/prospecting/segments/{segmentId}"]
                 methods: [PUT, DELETE]
                 permissions: [lead.write]
+              # The prospecting agent: Ask's open questions researched on the web (billed per question), and a
+              # researched prospect added as a lead.
+              - paths: ["/api/v1/crm/prospecting/research", "/api/v1/crm/prospecting/research/leads"]
+                methods: [POST]
+                permissions: [lead.write]
               - paths: ["/api/v1/crm/pipelines"]
                 methods: [GET]
                 permissions: [deal.read, lead.read, settings.read]
