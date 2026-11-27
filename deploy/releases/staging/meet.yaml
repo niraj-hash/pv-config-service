@@ -2,12 +2,12 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   meet-api  acrinterviewaistaging.azurecr.io/meet-api:2afc2ea
-#   meet-web  acrinterviewaistaging.azurecr.io/meet-web:2afc2ea
+#   meet-api  acrinterviewaistaging.azurecr.io/meet-api:83fe677
+#   meet-web  acrinterviewaistaging.azurecr.io/meet-web:83fe677
 releaseOf: meet
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/ai-demo-agent.git whose chart Argo CD renders.
-chartRevision: "2afc2eab7353ac2be11a57490e8f9a72d328954f"
+chartRevision: "43ff1e198369014c0e193f409a08659b4c25e224"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: "2afc2ea"
+    tag: "83fe677"
