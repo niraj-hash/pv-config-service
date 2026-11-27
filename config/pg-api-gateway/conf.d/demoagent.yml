@@ -155,8 +155,14 @@ pv:
               - paths: ["/api/v1/demo-preps/{id}"]
                 methods: [DELETE, GET]
                 permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/buyers"]
+                methods: [PUT]
+                permissions: [product.configure]
               - paths: ["/api/v1/demo-preps/{id}/explore"]
                 methods: [POST]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/facts"]
+                methods: [PUT]
                 permissions: [product.configure]
               - paths: ["/api/v1/demo-preps/{id}/link"]
                 methods: [POST]
@@ -166,6 +172,12 @@ pv:
                 permissions: [product.configure]
               - paths: ["/api/v1/demo-preps/{id}/manifest"]
                 methods: [GET, PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/plan"]
+                methods: [PUT]
+                permissions: [product.configure]
+              - paths: ["/api/v1/demo-preps/{id}/presenter"]
+                methods: [PUT]
                 permissions: [product.configure]
               - paths: ["/api/v1/demo-preps/{id}/publish"]
                 methods: [POST]
@@ -691,8 +703,14 @@ pv:
               - paths: ["/api/v1/demo-preps/{id}"]
                 methods: [DELETE, GET]
                 anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/buyers"]
+                methods: [PUT]
+                anonymous: true
               - paths: ["/api/v1/demo-preps/{id}/explore"]
                 methods: [POST]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/facts"]
+                methods: [PUT]
                 anonymous: true
               - paths: ["/api/v1/demo-preps/{id}/link"]
                 methods: [POST]
@@ -702,6 +720,12 @@ pv:
                 anonymous: true
               - paths: ["/api/v1/demo-preps/{id}/manifest"]
                 methods: [GET, PUT]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/plan"]
+                methods: [PUT]
+                anonymous: true
+              - paths: ["/api/v1/demo-preps/{id}/presenter"]
+                methods: [PUT]
                 anonymous: true
               - paths: ["/api/v1/demo-preps/{id}/publish"]
                 methods: [POST]
