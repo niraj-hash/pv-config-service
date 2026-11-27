@@ -186,7 +186,7 @@ ai:
       description: "Claude Opus 5.5: Anthropic's most capable model"
       aliases: [claude-opus]
       capabilities: [chat]
-      web-search: true                # web_search_20260209, $10 per 1,000 searches
+      web-search: true                # web_search_20250305 (cited), $10 per 1,000 searches
       vision: true
       sampling: false
       reasoning: true
@@ -209,7 +209,7 @@ ai:
       description: "Claude Sonnet 5.5: strong and fast for everyday work"
       aliases: [claude-sonnet]
       capabilities: [chat]
-      web-search: true                # web_search_20260209, $10 per 1,000 searches
+      web-search: true                # web_search_20250305 (cited), $10 per 1,000 searches
       vision: true
       sampling: false
       reasoning: true
