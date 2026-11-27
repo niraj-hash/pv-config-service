@@ -2,14 +2,14 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   demoagent-platform  acrinterviewaistaging.azurecr.io/demoagent-platform:7b3ac17
-#   demoagent-worker    acrinterviewaistaging.azurecr.io/demoagent-worker:7b3ac17
-#   demoagent-web       acrinterviewaistaging.azurecr.io/demoagent-web:7b3ac17
-#   demoagent-admin     acrinterviewaistaging.azurecr.io/demoagent-admin:7b3ac17
+#   demoagent-platform  acrinterviewaistaging.azurecr.io/demoagent-platform:2198106
+#   demoagent-worker    acrinterviewaistaging.azurecr.io/demoagent-worker:2198106
+#   demoagent-web       acrinterviewaistaging.azurecr.io/demoagent-web:2198106
+#   demoagent-admin     acrinterviewaistaging.azurecr.io/demoagent-admin:2198106
 releaseOf: demoagent
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/ai-demo-agent.git whose chart Argo CD renders.
-chartRevision: "7b3ac1736c4b7d048b665e1620899f0459088ada"
+chartRevision: "2198106868a4e67146f4aaf2f86cb85b29336f79"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: "7b3ac17"
+    tag: "2198106"
