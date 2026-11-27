@@ -1069,6 +1069,17 @@ pv:
               - paths: ["/api/v1/crm/phone-whatsapp/sent"]
                 methods: [POST]
                 permissions: [lead.write]
+              # ...and the phone's own recording of a call, for AI call notes.
+              - paths: ["/api/v1/crm/phone-calls/{callId}/recording"]
+                methods: [POST]
+                permissions: [lead.write]
+              # AI call notes on a lead: read them; confirm, dismiss or retry their proposals.
+              - paths: ["/api/v1/crm/leads/{leadId}/call-notes"]
+                methods: [GET]
+                permissions: [lead.read]
+              - paths: ["/api/v1/crm/leads/{leadId}/call-notes/{callId}/apply", "/api/v1/crm/leads/{leadId}/call-notes/{callId}/dismiss", "/api/v1/crm/leads/{leadId}/call-notes/{callId}/retry"]
+                methods: [POST]
+                permissions: [lead.write]
               # Find prospects: a workspace's Ad Library segments, and the advertisers captured there as leads.
               - paths: ["/api/v1/crm/prospecting"]
                 methods: [GET]
