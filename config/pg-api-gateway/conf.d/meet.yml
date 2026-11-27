@@ -106,6 +106,14 @@ pv:
               - paths: ["/api/v1/calendar", "/api/v1/meetings/{id}/calendar.ics", "/api/v1/me/personal-room", "/api/v1/me/calendar-feed"]
                 methods: [GET]
                 permissions: [meeting.manage]
+              # Phase 4 (meet/docs/product/phase4-workspaces-and-crm.md): the caller's workspace; meet-api lets only its
+              # admins change the settings.
+              - paths: ["/api/v1/workspace", "/api/v1/workspace/meetings"]
+                methods: [GET]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/workspace/settings"]
+                methods: [PATCH]
+                permissions: [meeting.manage]
               # A person's connected Google and Microsoft calendars.
               - paths: ["/api/v1/calendar-connections"]
                 methods: [GET]
@@ -185,7 +193,7 @@ pv:
         routes:
           - id: meet-platform-api
             upstream: lb://meet-api
-            paths: ["/api/v1/meetings", "/api/v1/meetings/**"]
+            paths: ["/api/v1/meetings", "/api/v1/meetings/**", "/api/v1/apps/me/webhook", "/api/v1/apps/me/webhook/**"]
             access: PROTECTED
             default-rule: DENY
             # Every endpoint is anonymous here: callers are client platforms' servers with their mk_ key, which
@@ -194,6 +202,13 @@ pv:
             # hour per client platform (its one mk_ key).
             rate-limit: { key: API_KEY, headers: [Authorization], paths: ["/api/v1/meetings/{id}/invites"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 6 }
             rules:
+              # A platform's webhook for its meetings' events (phase 4), with its own key.
+              - paths: ["/api/v1/apps/me/webhook"]
+                methods: [GET, PUT, DELETE]
+                anonymous: true
+              - paths: ["/api/v1/apps/me/webhook/rotate-secret"]
+                methods: [POST]
+                anonymous: true
               - paths: ["/api/v1/meetings"]
                 methods: [GET, POST]
                 anonymous: true

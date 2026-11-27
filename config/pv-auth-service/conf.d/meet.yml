@@ -17,14 +17,23 @@ auth:
         color: "#0e7490"
         order: 50
       self-signup: true          # sign-up creates an organization; meet-api creates the person PENDING on first use
-      signup-role: member
+      # Whoever signs up creates their organization (their Meet workspace) and is its admin (ai-demo-agent
+      # meet/docs/product/phase4-workspaces-and-crm.md).
+      signup-role: admin
+      # Workspace admins invite people and give roles here, in pv-auth-service: Meet has no member screens of its own.
+      manage-members-permission: meeting.admin
       permissions:
         meeting.manage: Plan meetings, invite people to them and host them (each person's own meetings)
+        meeting.admin: See and manage every meeting of the workspace, set its defaults, invite people and give roles
       roles:
         member:
           name: Member
-          description: Plans and hosts their own meetings, once a Meet super admin has approved them
+          description: Plans and hosts their own meetings, and sees the meetings teammates share
           permissions: [meeting.manage]
+        admin:
+          name: Workspace admin
+          description: Everything a member does, plus every meeting of the workspace, its settings, and its people
+          permissions: [meeting.manage, meeting.admin]
         super_admin:
           name: Meet super admin
           # Assign in the platform organization only: approves people, manages the platforms that use Meet and their
