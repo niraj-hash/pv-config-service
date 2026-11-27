@@ -8,7 +8,7 @@
 #   demoagent-admin     acrinterviewaistaging.azurecr.io/demoagent-admin:80dbb51
 releaseOf: demoagent
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/ai-demo-agent.git whose chart Argo CD renders.
-chartRevision: "80dbb515e3cb4a0fbf45134d3cbd799d11ef4395"
+chartRevision: "7a6c06812044a2a19cea8face1e77a03fb043868"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
