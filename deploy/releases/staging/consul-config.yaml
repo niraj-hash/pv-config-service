@@ -5,7 +5,7 @@
 #   pv-config-sync  acrinterviewaistaging.azurecr.io/pv-config-sync:ef53bd8
 releaseOf: consul-config
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/pv-config-service.git whose chart Argo CD renders.
-chartRevision: "660de544767b1a359ec3e0faba46f7b64e2d6afe"
+chartRevision: "19b86b30f537c52aa3773442c93d6537850b6a64"
 # Chart values (this file is the chart's last value file): the image tags.
 image:
   tag: "ef53bd8"
