@@ -41,6 +41,26 @@ pv:
                         "/api/v1/public/calls/{callToken}/end"]
                 methods: [POST]
                 anonymous: true
+              # Phase 1 (ai-demo-agent meet/docs/product/phase1-calendar-and-controls.md). In the call: the waiting room,
+              # lock and host controls, authorized by the call token (moderators only, checked by meet-api).
+              - paths: ["/api/v1/public/calls/{callToken}/lobby"]
+                methods: [GET]
+                anonymous: true
+              - paths: ["/api/v1/public/calls/{callToken}/lobby/admit-all", "/api/v1/public/calls/{callToken}/lobby/{id}/admit",
+                        "/api/v1/public/calls/{callToken}/lobby/{id}/deny", "/api/v1/public/calls/{callToken}/settings",
+                        "/api/v1/public/calls/{callToken}/mute-all", "/api/v1/public/calls/{callToken}/participants/{identity}/mute",
+                        "/api/v1/public/calls/{callToken}/participants/{identity}/remove",
+                        "/api/v1/public/calls/{callToken}/participants/{identity}/role"]
+                methods: [POST]
+                anonymous: true
+              # A guest in the waiting room: the ticket the join gave them is the permission.
+              - paths: ["/api/v1/public/lobby/{ticket}"]
+                methods: [GET, DELETE]
+                anonymous: true
+              # A person's calendar feed, which calendar apps fetch: its signed URL is the permission.
+              - paths: ["/api/v1/public/calendar-feeds/{token}"]
+                methods: [GET]
+                anonymous: true
               # A host's shared notes and recording link.
               - paths: ["/api/v1/public/shares/{token}"]
                 methods: [GET]
@@ -68,8 +88,12 @@ pv:
                 methods: [DELETE]
                 permissions: [meeting.manage]
               - paths: ["/api/v1/meetings/{id}/end", "/api/v1/meetings/{id}/cancel", "/api/v1/meetings/{id}/join",
-                        "/api/v1/meetings/{id}/shared-link/reset"]
+                        "/api/v1/meetings/{id}/shared-link/reset", "/api/v1/meetings/{id}/occurrences/cancel",
+                        "/api/v1/me/calendar-feed/reset"]
                 methods: [POST]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/calendar", "/api/v1/meetings/{id}/calendar.ics", "/api/v1/me/personal-room", "/api/v1/me/calendar-feed"]
+                methods: [GET]
                 permissions: [meeting.manage]
               # After the call: sessions, recordings, transcripts, AI notes, shares, search (the owner's meetings).
               - paths: ["/api/v1/meetings/{id}/sessions", "/api/v1/meetings/{id}/sessions/{sessionId}",
@@ -105,10 +129,16 @@ pv:
                 roles: [super_admin]
                 orgs: [platform]
             # Invite links, per client address: 60 at once, then one a second (the gateway's own ceiling).
-            rate-limit: { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 60, paths: ["/api/v1/public/**"] }
+            # Public pages per client address. Not the waiting room's poll (every 2.5 s per guest, and a room of guests
+            # can share an office's address): that has its own buckets below.
+            rate-limit: { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 60, paths: ["/api/v1/public/invites/**", "/api/v1/public/calls/**",
+                                                                                     "/api/v1/public/shares/**", "/api/v1/public/calendar-feeds/**"] }
             # The only limits on these requests (meet-api's own RateLimiter was removed on 2026-11-09): joining by invite
-            # link 60 per 10 minutes per client address; invitations 100 an hour per person.
+            # link 60 per 10 minutes per client address; invitations 100 an hour per person; the waiting room's poll one a
+            # second per guest and 20 a second per client address.
             rate-limits:
+              - { key: GUEST, path-variable: ticket, paths: ["/api/v1/public/lobby/{ticket}"], replenish-rate: 1, burst-capacity: 30 }
+              - { key: CLIENT_IP, paths: ["/api/v1/public/lobby/{ticket}"], replenish-rate: 20, burst-capacity: 600 }
               - { key: CLIENT_IP, paths: ["/api/v1/public/invites/{token}/join"], methods: [POST], replenish-rate: 1, burst-capacity: 600, requested-tokens: 10 }
               - { key: USER, paths: ["/api/v1/meetings/{id}/invites"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 36 }
               # LiveKit sends a burst of events per meeting (joins, tracks, recordings): generous, from its one address.
