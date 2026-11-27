@@ -614,6 +614,24 @@ ai:
       params: { cache-system-prompt: true, max-output-tokens: 12000, reasoning: { effort: medium } }
       timeout-ms: 180000
       deadline-ms: 400000
+    # Live captions (ai-demo-agent meet/docs/product/phase3-live-ai.md): each person's browser captions their own microphone
+    # with Azure Speech's SDK in Central India, from this short-lived token. Audio never leaves India and never passes
+    # through Meet or ai-service (owner's decision D2).
+    meet.live-captions:
+      description: Azure Speech token for the browser SDK (a person's own live captions in a Meet call)
+      products: [meet]
+      capability: speech_token
+      candidates: [azure-speech:browser]
+      params: { language: en-IN }
+    # The in-call assistant: "Catch me up" and questions about what was said, from the call's caption text (Meet sends the
+    # system prompt). Text only, as with the notes; fast models, since someone is waiting in the call.
+    meet.live-assist:
+      description: In-call assistant answers (catch-up summaries, questions) from a live call's captions
+      products: [meet]
+      candidates: [google:gemini-2.5-flash, openai:gpt-5-mini]
+      params: { temperature: 0.2, max-output-tokens: 1200, reasoning: { budget-tokens: 0, effort: minimal } }
+      timeout-ms: 30000
+      deadline-ms: 60000
 
   prompts:
     crm.lead-summary:
