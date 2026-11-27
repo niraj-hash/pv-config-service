@@ -2,10 +2,10 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   ai-service  acrinterviewaistaging.azurecr.io/ai-service:81cfb9e
+#   ai-service  acrinterviewaistaging.azurecr.io/ai-service:a01d91d
 releaseOf: ai-service
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/runvance-ai-service.git whose chart Argo CD renders.
-chartRevision: "81cfb9eab8cb170c036d95ab5914c8569e5cbfea"
+chartRevision: "a01d91dfbeeffabddc51aa1b9501b5b0924dc0d8"
 # Chart values (this file is the chart's last value file): the image tags.
 image:
-  tag: "81cfb9e"
+  tag: "a01d91d"
