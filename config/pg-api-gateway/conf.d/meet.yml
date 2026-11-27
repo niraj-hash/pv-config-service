@@ -61,6 +61,11 @@ pv:
               - paths: ["/api/v1/public/calendar-feeds/{token}"]
                 methods: [GET]
                 anonymous: true
+              # Phase 2 (meet/docs/product/phase2-calendar-sync.md): Google or Microsoft sends the browser back here; the
+              # signed state names the person, PKCE protects the code.
+              - paths: ["/api/v1/public/calendar-oauth/{provider}/callback"]
+                methods: [GET]
+                anonymous: true
               # A host's shared notes and recording link.
               - paths: ["/api/v1/public/shares/{token}"]
                 methods: [GET]
@@ -94,6 +99,16 @@ pv:
                 permissions: [meeting.manage]
               - paths: ["/api/v1/calendar", "/api/v1/meetings/{id}/calendar.ics", "/api/v1/me/personal-room", "/api/v1/me/calendar-feed"]
                 methods: [GET]
+                permissions: [meeting.manage]
+              # A person's connected Google and Microsoft calendars.
+              - paths: ["/api/v1/calendar-connections"]
+                methods: [GET]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/calendar-connections/{provider}/start"]
+                methods: [POST]
+                permissions: [meeting.manage]
+              - paths: ["/api/v1/calendar-connections/{id}"]
+                methods: [PATCH, DELETE]
                 permissions: [meeting.manage]
               # After the call: sessions, recordings, transcripts, AI notes, shares, search (the owner's meetings).
               - paths: ["/api/v1/meetings/{id}/sessions", "/api/v1/meetings/{id}/sessions/{sessionId}",
@@ -132,7 +147,8 @@ pv:
             # Public pages per client address. Not the waiting room's poll (every 2.5 s per guest, and a room of guests
             # can share an office's address): that has its own buckets below.
             rate-limit: { key: CLIENT_IP, replenish-rate: 1, burst-capacity: 60, paths: ["/api/v1/public/invites/**", "/api/v1/public/calls/**",
-                                                                                     "/api/v1/public/shares/**", "/api/v1/public/calendar-feeds/**"] }
+                                                                                     "/api/v1/public/shares/**", "/api/v1/public/calendar-feeds/**",
+                                                                                     "/api/v1/public/calendar-oauth/**"] }
             # The only limits on these requests (meet-api's own RateLimiter was removed on 2026-11-09): joining by invite
             # link 60 per 10 minutes per client address; invitations 100 an hour per person; the waiting room's poll one a
             # second per guest and 20 a second per client address.
