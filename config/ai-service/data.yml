@@ -186,6 +186,7 @@ ai:
       description: "Claude Opus 5.5: Anthropic's most capable model"
       aliases: [claude-opus]
       capabilities: [chat]
+      web-search: true                # web_search_20260209, $10 per 1,000 searches
       vision: true
       sampling: false
       reasoning: true
@@ -193,7 +194,7 @@ ai:
       server-fallback: true
       context-window: 1000000
       max-output: 128000
-      pricing: { input-per-mtok: 4.00, output-per-mtok: 20.00, cached-input-per-mtok: 0.40 }
+      pricing: { input-per-mtok: 4.00, output-per-mtok: 20.00, cached-input-per-mtok: 0.40, per-web-search: 0.01 }
     - id: anthropic:claude-opus-5
       description: "Claude Opus 5: deep reasoning and long documents"
       capabilities: [chat]
@@ -208,6 +209,7 @@ ai:
       description: "Claude Sonnet 5.5: strong and fast for everyday work"
       aliases: [claude-sonnet]
       capabilities: [chat]
+      web-search: true                # web_search_20260209, $10 per 1,000 searches
       vision: true
       sampling: false
       reasoning: true
@@ -215,7 +217,7 @@ ai:
       server-fallback: true
       context-window: 1000000
       max-output: 128000
-      pricing: { input-per-mtok: 2.00, output-per-mtok: 10.00, cached-input-per-mtok: 0.20 }
+      pricing: { input-per-mtok: 2.00, output-per-mtok: 10.00, cached-input-per-mtok: 0.20, per-web-search: 0.01 }
     - id: anthropic:claude-sonnet-4-5
       description: "Claude Sonnet 4.5 (deprecated: retires 2026-11-30)"
       capabilities: [chat]
@@ -263,6 +265,15 @@ ai:
       max-output: 65536
       # A grounded answer: $35 per 1,000 past the free 1,500 a day (estimate ignores the free ones).
       pricing: { input-per-mtok: 0.30, output-per-mtok: 2.50, per-web-search: 0.035 }
+    - id: google:gemini-3.8-flash
+      description: "Gemini 3.8 Flash: Google's current Flash (thinking levels); takes over from 2.5 Flash, closed to new keys"
+      capabilities: [chat]
+      vision: true
+      reasoning: true
+      thinking-budget: true           # takes thinking_budget 0 (thinking off), but not the "minimal" level
+      web-search: true                # Grounding with Google Search
+      max-output: 65536
+      # Not priced here yet: usage reports show it as unpriced until its prices are added.
     - id: google:gemini-2.5-pro
       description: "Gemini 2.5 Pro: Google's most capable, with a thinking budget"
       capabilities: [chat]
@@ -407,7 +418,7 @@ ai:
     crm.call-notes:
       description: Call notes from a call's transcript (summary, next step, field values, stage, follow-up, WhatsApp reply)
       products: [leados]
-      candidates: [google:gemini-2.5-flash, openai:gpt-5-mini]
+      candidates: [google:gemini-3.8-flash, openai:gpt-5-mini]
       key-mode: tenant-first
       params: { temperature: 0.1, max-output-tokens: 3000, reasoning: { budget-tokens: 0, effort: minimal } }
       timeout-ms: 45000
@@ -417,12 +428,13 @@ ai:
     crm.web-research:
       description: Ask's open questions researched with a Google search; the answer comes with its sources
       products: [leados]
-      candidates: [google:gemini-2.5-flash]   # Google Search grounding: Gemini only
+      # Claude only (owner's choice, 2026-11-27): its web search cites the exact words of each page it uses.
+      candidates: [anthropic:claude-opus-5-5]
       key-mode: tenant-first
       web-search: true
-      params: { temperature: 0.3, max-output-tokens: 4000, reasoning: { budget-tokens: 2048 } }
-      timeout-ms: 55000
-      deadline-ms: 60000              # with crm.prospect-check, inside the gateway's 120 s for CRM calls
+      params: { max-output-tokens: 8000, reasoning: { effort: medium } }
+      timeout-ms: 70000
+      deadline-ms: 80000              # with crm.prospect-check, inside the gateway's 120 s for CRM calls
       max-attempts: 1                 # a second try is a second paid search
       limits: { subject-daily-calls: 25 }   # metadata.subject_id = the person asking
     # The agent's second step: the grounded answer and its numbered sources become prospects (JSON schema
@@ -430,11 +442,11 @@ ai:
     crm.prospect-check:
       description: Prospects (name, role, company, signal, source numbers) from a grounded research answer
       products: [leados]
-      candidates: [google:gemini-2.5-flash, openai:gpt-5-mini]
+      candidates: [anthropic:claude-opus-5-5]   # Claude only, as the research step
       key-mode: tenant-first
-      params: { temperature: 0, max-output-tokens: 6000, reasoning: { budget-tokens: 0, effort: minimal } }
+      params: { max-output-tokens: 6000, reasoning: { effort: low } }
       timeout-ms: 30000
-      deadline-ms: 45000
+      deadline-ms: 35000
     crm.ad-voiceover:
       description: Ad Studio narration
       products: [leados]
@@ -654,7 +666,7 @@ ai:
     meet.live-assist:
       description: In-call assistant answers (catch-up summaries, questions) from a live call's captions
       products: [meet]
-      candidates: [google:gemini-2.5-flash, openai:gpt-5-mini]
+      candidates: [google:gemini-3.8-flash, openai:gpt-5-mini]
       params: { temperature: 0.2, max-output-tokens: 1200, reasoning: { budget-tokens: 0, effort: minimal } }
       timeout-ms: 30000
       deadline-ms: 60000
