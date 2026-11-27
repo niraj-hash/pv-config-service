@@ -43,6 +43,12 @@ meet:
     url: lb://notification-service
     token-url: lb://pv-auth-service/oauth2/token
     client-id: meet-svc
+  # People's connected calendars (ai-demo-agent meet/docs/product/phase2-calendar-sync.md). The client ids are not secret;
+  # the secrets are Key Vault's meet-api-<provider>-client-secret (optional: without one, that provider is not offered).
+  calendar-sync:
+    microsoft:
+      # Entra app "Runvance Meet" (tenant 122a8feb-...; work and personal accounts; created 2026-11-27).
+      client-id: c3e80dfb-cb08-4db6-8857-20703d34d53d
 # Outbound resilience: Runvance Notify and pv-auth-service use config/application's instances. ai-service's are
 # widened for meeting notes: the meet.notes profile may take up to 400 s inside ai-service (deadline-ms), so Meet waits
 # longer than the shared 130 s and does not count a long answer as a failure. Transcriptions do not go through these:
