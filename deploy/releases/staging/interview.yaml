@@ -2,13 +2,13 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   interviewai-api       acrinterviewaistaging.azurecr.io/interviewai-api:ba360a0
-#   interviewai-migrator  acrinterviewaistaging.azurecr.io/interviewai-migrator:ba360a0
-#   interviewai-web       acrinterviewaistaging.azurecr.io/interviewai-web:ba360a0
+#   interviewai-api       acrinterviewaistaging.azurecr.io/interviewai-api:69684e3
+#   interviewai-migrator  acrinterviewaistaging.azurecr.io/interviewai-migrator:69684e3
+#   interviewai-web       acrinterviewaistaging.azurecr.io/interviewai-web:69684e3
 releaseOf: interview
 # The commit (or, staging only, branch) of git@github.com:niraj-hash/interview-ai-management.git whose chart Argo CD renders.
-chartRevision: "6481d7b0722906d25168f761a067bb35af6436c6"
+chartRevision: "69684e3569b5f54758d5e0fcbc2cdb37d502f152"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: "ba360a0"
+    tag: "69684e3"
