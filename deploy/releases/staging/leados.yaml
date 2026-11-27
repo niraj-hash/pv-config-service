@@ -2,12 +2,12 @@
 # Written by scripts/release.sh: review the diff, push it to main, then Sync. Roll back with
 # History -> Rollback in Argo CD, or revert this file's commit and Sync (docs/deploy-with-argocd.md).
 #
-#   leados-api  acrinterviewaistaging.azurecr.io/leados-api:ae88e61
-#   leados-web  acrinterviewaistaging.azurecr.io/leados-web:ae88e61
+#   leados-api  acrinterviewaistaging.azurecr.io/leados-api:158e5c9
+#   leados-web  acrinterviewaistaging.azurecr.io/leados-web:158e5c9
 releaseOf: leados
 # The commit (or, staging only, branch) of git@github.com:Payvizio-Technologies/PayVizio-LeadOS.git whose chart Argo CD renders.
-chartRevision: "ae88e6175847b2336030f9d02de7fb4c5033d6c8"
+chartRevision: "158e5c95082d50b7630807ec9712380f94334361"
 # Chart values (this file is the chart's last value file): the image tags.
 common:
   image:
-    tag: "ae88e61"
+    tag: "158e5c9"
