@@ -53,6 +53,12 @@ pv:
                         "/api/v1/public/calls/{callToken}/participants/{identity}/role"]
                 methods: [POST]
                 anonymous: true
+              # Phase 3 (meet/docs/product/phase3-live-ai.md): live captions (an Azure Speech token for the person's own
+              # browser, their finished sentences) and the in-call assistant, with the call token.
+              - paths: ["/api/v1/public/calls/{callToken}/captions/token", "/api/v1/public/calls/{callToken}/captions",
+                        "/api/v1/public/calls/{callToken}/assistant"]
+                methods: [POST]
+                anonymous: true
               # A guest in the waiting room: the ticket the join gave them is the permission.
               - paths: ["/api/v1/public/lobby/{ticket}"]
                 methods: [GET, DELETE]
@@ -113,6 +119,9 @@ pv:
               # After the call: sessions, recordings, transcripts, AI notes, shares, search (the owner's meetings).
               - paths: ["/api/v1/meetings/{id}/sessions", "/api/v1/meetings/{id}/sessions/{sessionId}",
                         "/api/v1/meetings/{id}/recordings/{recordingId}/transcript",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/transcript.txt",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/transcript.vtt",
+                        "/api/v1/meetings/{id}/recordings/{recordingId}/transcript.srt",
                         "/api/v1/meetings/{id}/recordings/{recordingId}/notes",
                         "/api/v1/meetings/{id}/recordings/{recordingId}/media",
                         "/api/v1/meetings/{id}/recordings/{recordingId}/shares", "/api/v1/search"]
@@ -154,6 +163,10 @@ pv:
             # second per guest and 20 a second per client address.
             rate-limits:
               - { key: GUEST, path-variable: ticket, paths: ["/api/v1/public/lobby/{ticket}"], replenish-rate: 1, burst-capacity: 30 }
+              # Captions: a sentence every few seconds per speaker (their own bucket, not the public pages' per address); the
+              # assistant: a model call, so a few a minute per person.
+              - { key: GUEST, path-variable: callToken, paths: ["/api/v1/public/calls/{callToken}/captions"], methods: [POST], replenish-rate: 2, burst-capacity: 60 }
+              - { key: GUEST, path-variable: callToken, paths: ["/api/v1/public/calls/{callToken}/assistant"], methods: [POST], replenish-rate: 1, burst-capacity: 60, requested-tokens: 10 }
               - { key: CLIENT_IP, paths: ["/api/v1/public/lobby/{ticket}"], replenish-rate: 20, burst-capacity: 600 }
               - { key: CLIENT_IP, paths: ["/api/v1/public/invites/{token}/join"], methods: [POST], replenish-rate: 1, burst-capacity: 600, requested-tokens: 10 }
               - { key: USER, paths: ["/api/v1/meetings/{id}/invites"], methods: [POST], replenish-rate: 1, burst-capacity: 3600, requested-tokens: 36 }
