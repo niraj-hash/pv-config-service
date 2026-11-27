@@ -132,7 +132,8 @@ pv:
               - paths: ["/api/v1/public/forms/{slug}"]
                 methods: [GET]
                 anonymous: true
-              - paths: ["/api/v1/public/integrations/demo-booking/{connectionId}", "/api/v1/public/integrations/myoperator/{webhookKey}", "/api/v1/public/integrations/telecmi/{webhookKey}"]
+              - paths: ["/api/v1/public/integrations/demo-booking/{connectionId}", "/api/v1/public/integrations/myoperator/{webhookKey}", "/api/v1/public/integrations/telecmi/{webhookKey}",
+                        "/api/v1/public/integrations/meet/webhook/{organizationId}"]
                 methods: [POST]
                 anonymous: true
               - paths: ["/api/v1/public/leads"]
@@ -790,6 +791,10 @@ pv:
                 permissions: [settings.read]
               - paths: ["/api/v1/crm/integrations/meet"]
                 methods: [DELETE, PUT]
+                permissions: [integration.manage]
+              # Reconnect: sets the workspace's webhook at Runvance Meet again (a new secret).
+              - paths: ["/api/v1/crm/integrations/meet/webhook"]
+                methods: [POST]
                 permissions: [integration.manage]
               - paths: ["/api/v1/crm/integrations/meet"]
                 methods: [GET]
