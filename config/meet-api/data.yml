@@ -46,6 +46,10 @@ meet:
   # People's connected calendars (ai-demo-agent meet/docs/product/phase2-calendar-sync.md). The client ids are not secret;
   # the secrets are Key Vault's meet-api-<provider>-client-secret (optional: without one, that provider is not offered).
   calendar-sync:
+    google:
+      # Google Cloud project "runvance" (info@runvance.com), OAuth client "Runvance Meet (staging)", created 2026-11-27.
+      # External, in testing: only its test users can connect until Google verifies the app.
+      client-id: 39636570048-1v62t5v9jt7jq9iics12ihjqidcca70o.apps.googleusercontent.com
     microsoft:
       # Entra app "Runvance Meet" (tenant 122a8feb-...; work and personal accounts; created 2026-11-27).
       client-id: c3e80dfb-cb08-4db6-8857-20703d34d53d
